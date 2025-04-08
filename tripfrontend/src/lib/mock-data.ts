@@ -1,0 +1,187 @@
+import type { Itinerary, User } from "./types"
+
+export const mockUsers: User[] = [
+  {
+    id: "1",
+    name: "John Doe",
+    email: "john@example.com",
+    image: "/placeholder.svg?height=40&width=40",
+  },
+  {
+    id: "2",
+    name: "Jane Smith",
+    email: "jane@example.com",
+    image: "/placeholder.svg?height=40&width=40",
+  },
+]
+
+export const mockItineraries: Itinerary[] = [
+  {
+    id: "1",
+    title: "Weekend in Paris",
+    destination: "Paris, France",
+    description:
+      "Experience the magic of Paris in just a weekend. This itinerary covers all the must-see attractions, from the Eiffel Tower to the Louvre, along with some hidden gems that only locals know about. You'll also get to enjoy authentic French cuisine at some of the best restaurants in the city.",
+    shortDescription: "A perfect weekend getaway to experience the City of Lights.",
+    duration: 3,
+    price: 500,
+    rating: 4.8,
+    reviewCount: 24,
+    image: "/placeholder.svg?height=400&width=600",
+    createdBy: mockUsers[0],
+    createdAt: "2023-01-15T12:00:00Z",
+    stops: [
+      {
+        id: "1-1",
+        name: "Eiffel Tower",
+        description: "Visit the iconic Eiffel Tower and enjoy the panoramic view of Paris.",
+        type: "activity",
+        location: { lat: 48.8584, lng: 2.2945 },
+        day: 1,
+        order: 1,
+      },
+      {
+        id: "1-2",
+        name: "Louvre Museum",
+        description: "Explore one of the world's largest art museums and see the Mona Lisa.",
+        type: "activity",
+        location: { lat: 48.8606, lng: 2.3376 },
+        day: 1,
+        order: 2,
+      },
+      {
+        id: "1-3",
+        name: "Le Jules Verne",
+        description: "Enjoy a luxurious dinner at this Michelin-starred restaurant in the Eiffel Tower.",
+        type: "food",
+        location: { lat: 48.8583, lng: 2.2944 },
+        day: 1,
+        order: 3,
+      },
+      {
+        id: "1-4",
+        name: "Notre-Dame Cathedral",
+        description: "Visit the medieval Catholic cathedral on the Île de la Cité.",
+        type: "activity",
+        location: { lat: 48.853, lng: 2.3499 },
+        day: 2,
+        order: 1,
+      },
+      {
+        id: "1-5",
+        name: "Montmartre",
+        description: "Explore the bohemian neighborhood and visit the Sacré-Cœur Basilica.",
+        type: "activity",
+        location: { lat: 48.8867, lng: 2.3431 },
+        day: 2,
+        order: 2,
+      },
+    ],
+    reviews: [
+      {
+        id: "1-1",
+        rating: 5,
+        comment:
+          "This itinerary was perfect for our weekend trip! We saw all the major attractions and still had time to relax and enjoy the city.",
+        user: mockUsers[1],
+        createdAt: "2023-02-10T15:30:00Z",
+      },
+      {
+        id: "1-2",
+        rating: 4,
+        comment: "Great itinerary, but a bit rushed. I would recommend adding an extra day if possible.",
+        user: mockUsers[0],
+        createdAt: "2023-03-05T09:45:00Z",
+      },
+    ],
+  },
+  {
+    id: "2",
+    title: "Tokyo Adventure",
+    destination: "Tokyo, Japan",
+    description:
+      "Immerse yourself in the vibrant culture of Tokyo with this comprehensive 5-day itinerary. From traditional temples to futuristic skyscrapers, this itinerary covers all aspects of this fascinating city. You'll also get to try authentic Japanese cuisine and experience the unique nightlife.",
+    shortDescription: "Explore the perfect blend of tradition and modernity in Japan's capital.",
+    duration: 5,
+    price: 1200,
+    rating: 4.9,
+    reviewCount: 36,
+    image: "/placeholder.svg?height=400&width=600",
+    createdBy: mockUsers[1],
+    createdAt: "2023-02-20T14:30:00Z",
+    stops: [
+      {
+        id: "2-1",
+        name: "Senso-ji Temple",
+        description: "Visit Tokyo's oldest temple in the heart of Asakusa.",
+        type: "activity",
+        location: { lat: 35.7147, lng: 139.7967 },
+        day: 1,
+        order: 1,
+      },
+      {
+        id: "2-2",
+        name: "Tokyo Skytree",
+        description: "Enjoy the panoramic view of Tokyo from one of the tallest towers in the world.",
+        type: "activity",
+        location: { lat: 35.7101, lng: 139.8107 },
+        day: 1,
+        order: 2,
+      },
+    ],
+    reviews: [
+      {
+        id: "2-1",
+        rating: 5,
+        comment: "Amazing itinerary! We had the best time in Tokyo thanks to these recommendations.",
+        user: mockUsers[0],
+        createdAt: "2023-03-15T18:20:00Z",
+      },
+    ],
+  },
+  {
+    id: "3",
+    title: "New York City Explorer",
+    destination: "New York, USA",
+    description:
+      "Experience the energy of the Big Apple with this action-packed itinerary. From iconic landmarks like the Statue of Liberty and Empire State Building to world-class museums and Broadway shows, this itinerary covers all the must-see attractions in New York City.",
+    shortDescription: "The ultimate guide to exploring the city that never sleeps.",
+    duration: 4,
+    price: 800,
+    rating: 4.7,
+    reviewCount: 42,
+    image: "/placeholder.svg?height=400&width=600",
+    createdBy: mockUsers[0],
+    createdAt: "2023-03-10T10:15:00Z",
+    stops: [
+      {
+        id: "3-1",
+        name: "Statue of Liberty",
+        description: "Visit the iconic symbol of freedom and democracy.",
+        type: "activity",
+        location: { lat: 40.6892, lng: -74.0445 },
+        day: 1,
+        order: 1,
+      },
+      {
+        id: "3-2",
+        name: "Empire State Building",
+        description: "Enjoy the panoramic view of New York City from the observation deck.",
+        type: "activity",
+        location: { lat: 40.7484, lng: -73.9857 },
+        day: 1,
+        order: 2,
+      },
+    ],
+    reviews: [
+      {
+        id: "3-1",
+        rating: 5,
+        comment: "This itinerary helped us make the most of our time in New York. Highly recommended!",
+        user: mockUsers[1],
+        createdAt: "2023-04-05T14:10:00Z",
+      },
+    ],
+  },
+]
+
