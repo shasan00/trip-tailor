@@ -24,12 +24,10 @@ export function MainNav() {
   ]
 
   return (
-    <div className="flex justify-between items-center w-full">
-      <div className="flex-1">
-        <Link href={isAuthenticated ? "/search" : "/"} className="flex items-center space-x-2">
-          <span className="font-bold text-xl">TripTailor</span>
-        </Link>
-      </div>
+    <div className="flex items-center w-full">
+      <Link href={isAuthenticated ? "/search" : "/"} className="flex items-center space-x-2">
+        <span className="font-bold text-xl">TripTailor</span>
+      </Link>
 
       {/* Desktop Navigation - Centered */}
       <nav className="hidden md:flex items-center justify-center space-x-6 flex-1">
@@ -47,18 +45,15 @@ export function MainNav() {
         ))}
       </nav>
 
-      {/* Right side spacer for balance */}
-      <div className="flex-1 flex justify-end">
-        {/* Mobile Menu Button */}
-        <Button
-          variant="ghost"
-          className="md:hidden"
-          onClick={toggleMenu}
-          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-        >
-          {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </div>
+      {/* Mobile Menu Button */}
+      <Button
+        variant="ghost"
+        className="md:hidden ml-auto"
+        onClick={toggleMenu}
+        aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+      >
+        {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+      </Button>
 
       {/* Mobile Navigation */}
       {isMenuOpen && (
