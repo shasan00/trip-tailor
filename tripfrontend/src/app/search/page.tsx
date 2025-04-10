@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,9 @@ import { Slider } from "@/components/ui/slider"
 import { mockItineraries } from "@/lib/mock-data"
 import type { Itinerary } from "@/lib/types"
 import { Card, CardContent } from "@/components/ui/card"
+
+
+
 
 // Add this function after the imports
 const getPriceSymbol = (price: number): string => {
@@ -22,33 +25,26 @@ export default function SearchPage() {
   const [destination, setDestination] = useState("")
   const [duration, setDuration] = useState([1, 14])
   const [price, setPrice] = useState<string[]>([])
-  const [filteredItineraries, setFilteredItineraries] = useState<Itinerary[]>(mockItineraries)
+  const [filteredItineraries, setFilteredItineraries] = useState<Itinerary[]>([])
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/api/itineraries/")
+      .then((response) => response.json())
+      .then((data) => setFilteredItineraries(data))
+      .catch((error) => console.error("Error fetching itineraries:", error))
+  }, []);
+
+  
 
   const handleSearch = () => {
-    const filtered = mockItineraries.filter((itinerary) => {
-      const matchesDestination =
-        destination === "" || itinerary.destination.toLowerCase().includes(destination.toLowerCase())
-      const matchesDuration = itinerary.duration >= duration[0] && itinerary.duration <= duration[1]
+    const filtered = filteredItineraries.filter((itinerary) => 
+      itinerary.destination.toLowerCase().includes(destination.toLowerCase())
+      && itinerary.duration >= duration[0] && itinerary.duration <= duration[1]
+      && (price.length === 0 || price.includes(getPriceSymbol(itinerary.price)))
+    );
 
-      // Price filtering logic
-      let matchesPrice = true
-      if (price.length > 0) {
-        if (price.includes("$") && itinerary.price <= 500) {
-          matchesPrice = true
-        } else if (price.includes("$$") && itinerary.price > 500 && itinerary.price <= 1000) {
-          matchesPrice = true
-        } else if (price.includes("$$$") && itinerary.price > 1000) {
-          matchesPrice = true
-        } else {
-          matchesPrice = false
-        }
-      }
-
-      return matchesDestination && matchesDuration && matchesPrice
-    })
-
-    setFilteredItineraries(filtered)
-  }
+    setFilteredItineraries(filtered);
+  };
 
   return (
     <div className="container py-8">
@@ -139,14 +135,13 @@ export default function SearchPage() {
                 <div className="relative h-48 w-full overflow-hidden">
                   <Image
                     src={itinerary.image || "/placeholder.svg"}
-                    alt={itinerary.title}
+                    alt={itinerary.name}
                     fill
                     className="object-cover transition-transform group-hover:scale-105"
                   />
                 </div>
                 <div className="p-4 flex-1 flex flex-col">
-                  <h3 className="text-lg font-semibold mb-2">{itinerary.title}</h3>
-                  <p className="text-sm text-muted-foreground mb-4 flex-1">{itinerary.shortDescription}</p>
+                  <h3 className="text-lg font-semibold mb-2">{itinerary.name}</h3>
                   <div className="flex justify-between items-center mt-auto">
                     <div className="flex items-center">
                       <svg
@@ -163,8 +158,7 @@ export default function SearchPage() {
                       >
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                       </svg>
-                      <span className="text-sm">{itinerary.rating.toFixed(1)}</span>
-                      <span className="text-xs text-muted-foreground ml-1">({itinerary.reviewCount})</span>
+                      <span className="text-sm">{itinerary.rating}</span>
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {itinerary.duration} days · {getPriceSymbol(itinerary.price)}
