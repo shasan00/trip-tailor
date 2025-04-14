@@ -1,7 +1,21 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
-import { mockItineraries } from "@/lib/mock-data"
+
+interface Itinerary {
+  id: number
+  name: string
+  description: string
+  duration: number
+  destination: string
+  price: number
+  rating: number
+  image: string
+  status: string
+}
 
 // Add this function after the imports
 const getPriceSymbol = (price: number): string => {
@@ -11,8 +25,36 @@ const getPriceSymbol = (price: number): string => {
 }
 
 export default function Home() {
-  // Get 3 featured itineraries
-  const featuredItineraries = mockItineraries.slice(0, 3)
+  const [featuredItineraries, setFeaturedItineraries] = useState<Itinerary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchItineraries = async () => {
+      try {
+        const response = await fetch("http://192.168.1.159:8000/api/itineraries/")
+        if (!response.ok) {
+          throw new Error("Failed to fetch itineraries")
+        }
+        const data = await response.json()
+        setFeaturedItineraries(data.slice(0, 3)) // Get first 3 itineraries
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "An error occurred")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchItineraries()
+  }, [])
+
+  if (loading) {
+    return <div className="container py-8 text-center">Loading...</div>
+  }
+
+  if (error) {
+    return <div className="container py-8 text-center text-red-500">{error}</div>
+  }
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -142,14 +184,14 @@ export default function Home() {
                   <div className="relative h-48 w-full overflow-hidden">
                     <Image
                       src={itinerary.image || "/placeholder.svg"}
-                      alt={itinerary.title}
+                      alt={itinerary.name}
                       fill
                       className="object-cover transition-transform group-hover:scale-105"
                     />
                   </div>
                   <div className="p-4">
-                    <h3 className="text-lg font-semibold mb-2">{itinerary.title}</h3>
-                    <p className="text-sm text-muted-foreground mb-2">{itinerary.shortDescription}</p>
+                    <h3 className="text-lg font-semibold mb-2">{itinerary.name}</h3>
+                    <p className="text-sm text-muted-foreground mb-2">{itinerary.description}</p>
                     <div className="flex justify-between items-center">
                       <div className="flex items-center">
                         <svg

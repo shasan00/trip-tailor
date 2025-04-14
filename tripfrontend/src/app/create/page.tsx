@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -34,6 +34,11 @@ export default function CreateItineraryPage() {
   // const [shortDescription, setShortDescription] = useState('');
   const [stops, setStops] = useState<Stop[]>([])
   const [currentTab, setCurrentTab] = useState("details")
+  const [image, setImage] = useState<File | null>(null)
+  const [additionalPhotos, setAdditionalPhotos] = useState<File[]>([])
+  const [itineraryId, setItineraryId] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const additionalPhotosRef = useRef<HTMLInputElement>(null)
 
   const addStop = (day: number) => {
     const newStop: Stop = {
@@ -57,10 +62,164 @@ export default function CreateItineraryPage() {
     setStops(stops.filter((stop) => stop.id !== id))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setImage(e.target.files[0])
+    }
+  }
+
+  const handleAdditionalPhotosChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      setAdditionalPhotos(Array.from(e.target.files))
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In a real app, this would submit the itinerary to the server
-    alert("Itinerary created successfully!")
+    
+    const token = localStorage.getItem('token')
+    console.log("Token from localStorage:", token)
+    
+    if (!token) {
+      alert("You must be logged in to create an itinerary. Please log in and try again.")
+      window.location.href = "/login" // Redirect to login page
+      return
+    }
+
+    if (!image) {
+      alert("Please upload a cover image for the itinerary")
+      return
+    }
+    
+    try {
+      // First, create a FormData instance
+      const formData = new FormData()
+      
+      // Add basic fields
+      formData.append('name', title)
+      formData.append('description', description) // This should be a string
+      formData.append('duration', duration.toString())
+      formData.append('destination', destination)
+      formData.append('price', (price.length * 100).toString())
+      formData.append('status', 'draft')
+      
+      // Add cover image
+      formData.append('image', image)
+      
+      // Add additional photos
+      additionalPhotos.forEach((photo) => {
+        formData.append('photos', photo)
+      })
+      
+      // Create days array
+      const daysData = Array.from({ length: duration }).map((_, index) => ({
+        day_number: index + 1,
+        title: `Day ${index + 1}`,
+        description: "",
+        activities: stops
+          .filter(stop => stop.day === index + 1)
+          .map(stop => ({
+            name: stop.name,
+            description: stop.description,
+            type: stop.type,
+            location: stop.location
+          }))
+      }))
+      
+      // Add days as JSON string
+      formData.append('days', JSON.stringify(daysData))
+
+      // Log the form data for debugging
+      console.log("Form data being sent:")
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}:`, value)
+      }
+
+      const response = await fetch("http://192.168.1.159:8000/api/user/itineraries/", {
+        method: "POST",
+        headers: {
+          "Authorization": `Token ${token}`
+        },
+        body: formData
+      })
+
+      console.log("Response status:", response.status)
+      console.log("Response headers:", Object.fromEntries(response.headers.entries()))
+
+      let errorData;
+      try {
+        errorData = await response.json()
+        console.log("Response data:", errorData)
+      } catch (e) {
+        console.error("Failed to parse response as JSON:", e)
+      }
+
+      if (response.status === 401) {
+        // Token is invalid or expired
+        localStorage.removeItem('token') // Clear the invalid token
+        alert("Your session has expired. Please log in again.")
+        window.location.href = "/login"
+        return
+      }
+
+      if (!response.ok) {
+        // Log the specific validation errors if they exist
+        if (errorData) {
+          console.error("Validation errors:", errorData)
+          const errorMessages = Object.entries(errorData)
+            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+            .join('\n')
+          throw new Error(`Validation errors:\n${errorMessages}`)
+        }
+        throw new Error(errorData?.detail || errorData?.error || "Failed to create itinerary")
+      }
+
+      const newItinerary = await response.json()
+      setItineraryId(newItinerary.id)
+      
+      alert("Itinerary created successfully!")
+      // Don't redirect yet, let the user publish if they want to
+    } catch (error) {
+      console.error("Full error:", error)
+      alert("Error creating itinerary: " + (error instanceof Error ? error.message : "Unknown error"))
+    }
+  }
+
+  const handlePublish = async () => {
+    if (!itineraryId) {
+      alert("Please create the itinerary first")
+      return
+    }
+
+    const token = localStorage.getItem('token')
+    if (!token) {
+      alert("You must be logged in to publish an itinerary")
+      return
+    }
+
+    try {
+      const response = await fetch(`http://192.168.1.159:8000/api/user/itineraries/${itineraryId}/publish/`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Token ${token}`,
+          'Content-Type': 'application/json',
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Failed to publish itinerary")
+      }
+
+      const updatedItinerary = await response.json()
+      console.log("Published itinerary:", updatedItinerary)
+      
+      alert("Itinerary published successfully!")
+      window.location.href = "/search" // Redirect to search page
+    } catch (error) {
+      console.error("Error publishing itinerary:", error)
+      alert("Error publishing itinerary: " + (error instanceof Error ? error.message : "Unknown error"))
+    }
   }
 
   return (
@@ -270,42 +429,68 @@ export default function CreateItineraryPage() {
           <TabsContent value="photos" className="space-y-6">
             <Card>
               <CardContent className="pt-6">
-                <div className="space-y-4">
-                  <h3 className="text-xl font-semibold">Upload Photos</h3>
-                  <p className="text-muted-foreground">
-                    Add photos to showcase your itinerary. You can upload up to 10 photos.
-                  </p>
-
-                  <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                    <div className="space-y-4">
-                      <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="24"
-                          height="24"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-primary"
-                        >
-                          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
-                          <line x1="16" x2="22" y1="5" y2="5" />
-                          <line x1="19" x2="19" y1="2" y2="8" />
-                          <circle cx="9" cy="9" r="2" />
-                          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                        </svg>
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="cover-image">Cover Image</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Upload a cover image that represents your itinerary. This will be the main image shown in listings.
+                    </p>
+                    <Input
+                      id="cover-image"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageChange}
+                      ref={fileInputRef}
+                      required
+                    />
+                    {image && (
+                      <div className="mt-2">
+                        <img 
+                          src={URL.createObjectURL(image)} 
+                          alt="Cover preview" 
+                          className="max-h-48 rounded-lg"
+                        />
                       </div>
-                      <p className="text-sm font-medium">Drag and drop your photos here, or click to browse</p>
-                      <p className="text-xs text-muted-foreground">
-                        Supported formats: JPG, PNG, WEBP. Max file size: 5MB.
-                      </p>
-                      <Button type="button" variant="outline" size="sm">
-                        Browse Files
-                      </Button>
-                    </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="additional-photos">Additional Photos</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Add more photos to showcase your itinerary. You can select multiple photos at once.
+                    </p>
+                    <Input
+                      id="additional-photos"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleAdditionalPhotosChange}
+                      ref={additionalPhotosRef}
+                    />
+                    {additionalPhotos.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                        {additionalPhotos.map((photo, index) => (
+                          <div key={index} className="relative">
+                            <img
+                              src={URL.createObjectURL(photo)}
+                              alt={`Additional photo ${index + 1}`}
+                              className="rounded-lg h-32 w-full object-cover"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="absolute top-2 right-2"
+                              onClick={() => {
+                                setAdditionalPhotos(photos => photos.filter((_, i) => i !== index))
+                              }}
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>

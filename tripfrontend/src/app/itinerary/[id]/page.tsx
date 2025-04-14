@@ -1,20 +1,42 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
-import Image from "next/image"
-import { useParams } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { mockItineraries } from "@/lib/mock-data"
 import { Heart, Share2, MapPin, Calendar, DollarSign, Star } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 
-// Add this function after the imports
+interface Itinerary {
+  id: number
+  name: string
+  description: string
+  destination: string
+  duration: number
+  price: number
+  image: string
+  status: string
+  user: {
+    username: string
+    first_name: string
+    last_name: string
+  }
+  days: Array<{
+    day_number: number
+    title: string
+    description: string
+    activities: Array<{
+      name: string
+      description: string
+      type: string
+      location: string
+    }>
+  }>
+}
+
 const getPriceSymbol = (price: number): string => {
   if (price <= 500) return "$"
   if (price <= 1000) return "$$"
@@ -23,28 +45,76 @@ const getPriceSymbol = (price: number): string => {
 
 export default function ItineraryDetailPage() {
   const params = useParams()
+  const router = useRouter()
   const id = params.id as string
-
-  // Find the itinerary with the matching ID
-  const itinerary = mockItineraries.find((item) => item.id === id)
-
+  const [itinerary, setItinerary] = useState<Itinerary | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [reviewText, setReviewText] = useState("")
   const [rating, setRating] = useState(0)
 
-  if (!itinerary) {
+  useEffect(() => {
+    const fetchItinerary = async () => {
+      try {
+        const response = await fetch(`http://192.168.1.159:8000/api/itineraries/${id}/`)
+        if (!response.ok) {
+          throw new Error("Failed to fetch itinerary")
+        }
+        const data = await response.json()
+        console.log("API Response:", data)
+        console.log("User data:", data.user)
+        setItinerary(data)
+        
+        // Check if this itinerary is in favorites
+        const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
+        setIsFavorite(favorites.some((fav: Itinerary) => fav.id === data.id))
+      } catch (err) {
+        console.error("Error fetching itinerary:", err)
+        setError(err instanceof Error ? err.message : "An error occurred")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchItinerary()
+  }, [id])
+
+  if (loading) {
+    return (
+      <div className="container py-16 text-center">
+        <p className="text-lg">Loading itinerary...</p>
+      </div>
+    )
+  }
+
+  if (error || !itinerary) {
     return (
       <div className="container py-16 text-center">
         <h1 className="text-3xl font-bold mb-4">Itinerary Not Found</h1>
         <p className="text-muted-foreground mb-8">
           The itinerary you're looking for doesn't exist or has been removed.
         </p>
-        <Button onClick={() => window.history.back()}>Go Back</Button>
+        <Button onClick={() => router.back()}>Go Back</Button>
       </div>
     )
   }
 
   const toggleFavorite = () => {
+    if (!itinerary) return
+
+    const favorites = JSON.parse(localStorage.getItem('favorites') || '[]')
+    let newFavorites
+
+    if (isFavorite) {
+      // Remove from favorites
+      newFavorites = favorites.filter((fav: Itinerary) => fav.id !== itinerary.id)
+    } else {
+      // Add to favorites
+      newFavorites = [...favorites, itinerary]
+    }
+
+    localStorage.setItem('favorites', JSON.stringify(newFavorites))
     setIsFavorite(!isFavorite)
   }
 
@@ -61,11 +131,15 @@ export default function ItineraryDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="relative h-[400px] w-full rounded-lg overflow-hidden mb-6">
-            <Image src={itinerary.image || "/placeholder.svg"} alt={itinerary.title} fill className="object-cover" />
+            <img
+              src={itinerary.image}
+              alt={itinerary.name}
+              className="object-cover w-full h-full"
+            />
           </div>
 
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">{itinerary.title}</h1>
+            <h1 className="text-3xl font-bold">{itinerary.name}</h1>
             <div className="flex space-x-2">
               <Button
                 variant="outline"
@@ -94,14 +168,9 @@ export default function ItineraryDetailPage() {
               <DollarSign size={16} className="mr-1" />
               <span>{getPriceSymbol(itinerary.price)}</span>
             </div>
-            <div className="flex items-center">
-              <Star size={16} className="text-yellow-500 mr-1" />
-              <span>{itinerary.rating.toFixed(1)}</span>
-              <span className="text-muted-foreground ml-1">({itinerary.reviewCount} reviews)</span>
-            </div>
           </div>
 
-          <Tabs defaultValue="overview">
+          <Tabs defaultValue="overview" value="overview">
             <TabsList className="mb-4">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
@@ -115,46 +184,43 @@ export default function ItineraryDetailPage() {
               <h3 className="text-xl font-semibold mt-6">Created by</h3>
               <div className="flex items-center">
                 <Avatar className="h-10 w-10 mr-3">
-                  <AvatarImage src={itinerary.createdBy.image} alt={itinerary.createdBy.name} />
-                  <AvatarFallback>{itinerary.createdBy.name.charAt(0)}</AvatarFallback>
+                  <AvatarFallback>
+                    {itinerary.user?.first_name ? itinerary.user.first_name.charAt(0) : '?'}
+                  </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">{itinerary.createdBy.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Created on {new Date(itinerary.createdAt).toLocaleDateString()}
+                  <p className="font-medium">
+                    {itinerary.user?.first_name && itinerary.user?.last_name 
+                      ? `${itinerary.user.first_name} ${itinerary.user.last_name}`
+                      : 'Unknown User'}
                   </p>
                 </div>
               </div>
             </TabsContent>
 
             <TabsContent value="itinerary" className="space-y-6">
-              {Array.from({ length: itinerary.duration }).map((_, dayIndex) => {
-                const dayNumber = dayIndex + 1
-                const dayStops = itinerary.stops.filter((stop) => stop.day === dayNumber)
-
-                return (
-                  <div key={dayNumber} className="space-y-4">
-                    <h3 className="text-xl font-semibold">Day {dayNumber}</h3>
-                    {dayStops.length > 0 ? (
-                      <div className="space-y-4">
-                        {dayStops.map((stop) => (
-                          <div key={stop.id} className="border rounded-lg p-4">
-                            <div className="flex justify-between">
-                              <h4 className="font-medium">{stop.name}</h4>
-                              <span className="text-xs px-2 py-1 bg-muted rounded-full">
-                                {stop.type.charAt(0).toUpperCase() + stop.type.slice(1)}
-                              </span>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-2">{stop.description}</p>
+              {itinerary.days.map((day) => (
+                <div key={day.day_number} className="space-y-4">
+                  <h3 className="text-xl font-semibold">Day {day.day_number}</h3>
+                  {day.activities.length > 0 ? (
+                    <div className="space-y-4">
+                      {day.activities.map((activity, index) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="flex justify-between">
+                            <h4 className="font-medium">{activity.name}</h4>
+                            <span className="text-xs px-2 py-1 bg-muted rounded-full">
+                              {activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}
+                            </span>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground">No activities planned for this day.</p>
-                    )}
-                  </div>
-                )
-              })}
+                          <p className="text-sm text-muted-foreground mt-2">{activity.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">No activities planned for this day.</p>
+                  )}
+                </div>
+              ))}
             </TabsContent>
 
             <TabsContent value="map">
@@ -164,34 +230,6 @@ export default function ItineraryDetailPage() {
             </TabsContent>
 
             <TabsContent value="reviews" className="space-y-6">
-              <div className="space-y-4">
-                {itinerary.reviews.map((review) => (
-                  <div key={review.id} className="border rounded-lg p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center">
-                        <Avatar className="h-8 w-8 mr-2">
-                          <AvatarImage src={review.user.image} alt={review.user.name} />
-                          <AvatarFallback>{review.user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <p className="font-medium">{review.user.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(review.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center">
-                        <Star size={14} className="text-yellow-500" />
-                        <span className="ml-1">{review.rating.toFixed(1)}</span>
-                      </div>
-                    </div>
-                    <p className="text-sm">{review.comment}</p>
-                  </div>
-                ))}
-              </div>
-
-              <Separator />
-
               <form onSubmit={handleSubmitReview} className="space-y-4">
                 <h3 className="text-xl font-semibold">Write a Review</h3>
 
@@ -241,14 +279,6 @@ export default function ItineraryDetailPage() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Price</span>
                 <span className="font-medium">{getPriceSymbol(itinerary.price)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Rating</span>
-                <div className="flex items-center">
-                  <Star size={16} className="text-yellow-500 mr-1" />
-                  <span>{itinerary.rating.toFixed(1)}</span>
-                  <span className="text-xs text-muted-foreground ml-1">({itinerary.reviewCount})</span>
-                </div>
               </div>
             </div>
 
