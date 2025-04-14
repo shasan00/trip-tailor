@@ -44,7 +44,7 @@ export default function SearchPage() {
   const fetchItineraries = async () => {
     try {
       console.log("Fetching itineraries from API...")
-      const response = await fetch("http://192.168.1.159:8000/api/itineraries/", {
+      const response = await fetch("http://localhost:8000/api/itineraries/", {
         method: 'GET',
         headers: {
           'Accept': 'application/json',
@@ -220,7 +220,7 @@ export default function SearchPage() {
                 <div className="relative h-48 w-full overflow-hidden">
                   {itinerary.image ? (
                     <img
-                      src={`http://192.168.1.159:8000${itinerary.image}`}
+                      src={`http://localhost:8000${itinerary.image}`}
                       alt={itinerary.name}
                       className="object-cover w-full h-full transition-transform group-hover:scale-105"
                       onError={(e) => {
