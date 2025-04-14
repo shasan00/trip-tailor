@@ -135,7 +135,7 @@ export default function CreateItineraryPage() {
         console.log(`${key}:`, value)
       }
 
-      const response = await fetch("http://192.168.1.159:8000/api/user/itineraries/", {
+      const response = await fetch("http://localhost:8000/api/user/itineraries/", {
         method: "POST",
         headers: {
           "Authorization": `Token ${token}`
@@ -198,7 +198,7 @@ export default function CreateItineraryPage() {
     }
 
     try {
-      const response = await fetch(`http://192.168.1.159:8000/api/user/itineraries/${itineraryId}/publish/`, {
+      const response = await fetch(`http://localhost:8000/api/user/itineraries/${itineraryId}/publish/`, {
         method: 'POST',
         headers: {
           'Authorization': `Token ${token}`,

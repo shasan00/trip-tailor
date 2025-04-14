@@ -32,7 +32,7 @@ export default function Home() {
   useEffect(() => {
     const fetchItineraries = async () => {
       try {
-        const response = await fetch("http://192.168.1.159:8000/api/itineraries/")
+        const response = await fetch("http://localhost:8000/api/itineraries/")
         if (!response.ok) {
           throw new Error("Failed to fetch itineraries")
         }
@@ -208,7 +208,7 @@ export default function Home() {
                         >
                           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                         </svg>
-                        <span className="text-sm">{itinerary.rating.toFixed(1)}</span>
+                        <span className="text-sm">{Number(itinerary.rating).toFixed(1)}</span>
                       </div>
                       <div className="text-sm text-muted-foreground">
                         {itinerary.duration} days · {getPriceSymbol(itinerary.price)}

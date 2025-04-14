@@ -57,7 +57,7 @@ export default function ItineraryDetailPage() {
   useEffect(() => {
     const fetchItinerary = async () => {
       try {
-        const response = await fetch(`http://192.168.1.159:8000/api/itineraries/${id}/`)
+        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/`)
         if (!response.ok) {
           throw new Error("Failed to fetch itinerary")
         }
