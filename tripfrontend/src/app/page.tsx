@@ -182,13 +182,17 @@ export default function Home() {
               <Link key={itinerary.id} href={`/itinerary/${itinerary.id}`} className="group">
                 <div className="rounded-lg overflow-hidden border bg-card text-card-foreground shadow-sm transition-all hover:shadow-md">
                   <div className="relative h-48 w-full overflow-hidden">
-                    <Image
-                      src={itinerary.image || "/placeholder.svg"}
-                      alt={itinerary.name}
-                      fill
-                      className="object-cover transition-transform group-hover:scale-105"
-                    />
-                  </div>
+                    {itinerary.image ? (
+                      <img
+                        src={`http://localhost:8000${itinerary.image}`}
+                        alt={itinerary.name}
+                        className="object-cover transition-transform group-hover:scale-105"
+                    /> ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center">
+                      <span className="text-muted-foreground">No image</span>
+                      </div>
+                )}
+                </div>
                   <div className="p-4">
                     <h3 className="text-lg font-semibold mb-2">{itinerary.name}</h3>
                     <p className="text-sm text-muted-foreground mb-2">{itinerary.description}</p>
