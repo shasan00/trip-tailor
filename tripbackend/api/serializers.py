@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
-from .models import Itinerary, ItineraryDay, ItineraryPhoto
+from .models import Itinerary, ItineraryDay, ItineraryPhoto, Review
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -101,3 +101,19 @@ class ItinerarySerializer(serializers.ModelSerializer):
             ItineraryPhoto.objects.create(itinerary=instance, **photo_data)
             
         return instance
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user = serializers.SerializerMethodField()
+    user_id = serializers.PrimaryKeyRelatedField(source='user', read_only=True)
+
+    class Meta:
+        model = Review
+        fields = ['id', 'user', 'user_id', 'rating', 'comment', 'created_at', 'updated_at']
+        read_only_fields = ['user', 'user_id', 'created_at', 'updated_at']
+
+    def get_user(self, obj):
+        return {
+            'id': obj.user.id,
+            'first_name': obj.user.first_name,
+            'last_name': obj.user.last_name
+        }

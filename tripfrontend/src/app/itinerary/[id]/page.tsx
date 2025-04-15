@@ -5,10 +5,12 @@ import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Heart, Share2, MapPin, Calendar, DollarSign, Star } from "lucide-react"
+import { Heart, Share2, MapPin, Calendar, DollarSign, Star, Pencil, Trash2 } from "lucide-react"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
+import Link from "next/link"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Itinerary {
   id: number
@@ -23,6 +25,8 @@ interface Itinerary {
     username: string
     first_name: string
     last_name: string
+    email: string
+    id: number
   }
   days: Array<{
     day_number: number
@@ -37,6 +41,18 @@ interface Itinerary {
   }>
 }
 
+interface Review {
+  id: number
+  user: {
+    id: number
+    first_name: string
+    last_name: string
+  }
+  rating: number
+  comment: string
+  created_at: string
+}
+
 const getPriceSymbol = (price: number): string => {
   if (price <= 500) return "$"
   if (price <= 1000) return "$$"
@@ -46,6 +62,7 @@ const getPriceSymbol = (price: number): string => {
 export default function ItineraryDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { toast } = useToast()
   const id = params.id as string
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -53,6 +70,18 @@ export default function ItineraryDetailPage() {
   const [isFavorite, setIsFavorite] = useState(false)
   const [reviewText, setReviewText] = useState("")
   const [rating, setRating] = useState(0)
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [newReview, setNewReview] = useState({
+    rating: 0,
+    comment: ''
+  })
+  const [hasReviewed, setHasReviewed] = useState(false)
+  const [activeTab, setActiveTab] = useState("overview")
+  const [editingReview, setEditingReview] = useState<Review | null>(null)
+  const [editReviewData, setEditReviewData] = useState({
+    rating: 0,
+    comment: ''
+  })
 
   useEffect(() => {
     const fetchItinerary = async () => {
@@ -63,7 +92,9 @@ export default function ItineraryDetailPage() {
         }
         const data = await response.json()
         console.log("API Response:", data)
-        console.log("User data:", data.user)
+        console.log("Current user from localStorage:", localStorage.getItem('username'))
+        console.log("Itinerary user:", data.user?.username)
+        console.log("Should show edit button:", data.user?.id.toString() === localStorage.getItem('userId'))
         setItinerary(data)
         
         // Check if this itinerary is in favorites
@@ -78,6 +109,56 @@ export default function ItineraryDetailPage() {
     }
 
     fetchItinerary()
+  }, [id])
+
+  useEffect(() => {
+    const fetchReviews = async () => {
+      try {
+        console.log('Fetching reviews for itinerary:', id)
+        const token = localStorage.getItem('token')
+        if (!token) {
+          console.log('No token found, skipping reviews fetch')
+          return
+        }
+
+        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`, {
+          headers: {
+            'Authorization': `Token ${token}`
+          }
+        })
+        console.log('Reviews API response status:', response.status)
+        
+        if (!response.ok) {
+          let errorMessage = "Failed to fetch reviews"
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+            console.error('Reviews API error:', errorData)
+          } catch (e) {
+            // If response is not JSON, use status text
+            errorMessage = response.statusText || errorMessage
+            console.error('Failed to parse error response:', e)
+          }
+          throw new Error(errorMessage)
+        }
+
+        const data = await response.json()
+        console.log('Reviews data:', data)
+        setReviews(data)
+        
+        // Check if current user has reviewed
+        const userId = localStorage.getItem('userId')
+        if (userId) {
+          const userReview = data.find((review: Review) => review.user.id.toString() === userId)
+          setHasReviewed(!!userReview)
+        }
+      } catch (err) {
+        console.error("Error fetching reviews:", err)
+        setReviews([])
+      }
+    }
+
+    fetchReviews()
   }, [id])
 
   if (loading) {
@@ -118,12 +199,156 @@ export default function ItineraryDetailPage() {
     setIsFavorite(!isFavorite)
   }
 
-  const handleSubmitReview = (e: React.FormEvent) => {
+  const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
-    // In a real app, this would submit the review to the server
-    alert("Review submitted!")
-    setReviewText("")
-    setRating(0)
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to submit a review",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify({
+          rating: newReview.rating,
+          comment: newReview.comment
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to submit review")
+      }
+
+      const data = await response.json()
+      setReviews([data, ...reviews])
+      setHasReviewed(true)
+      setNewReview({ rating: 0, comment: '' })
+      
+      toast({
+        title: "Success",
+        description: "Your review has been submitted!",
+      })
+    } catch (err) {
+      console.error("Error submitting review:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to submit review",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleShare = () => {
+    const url = window.location.href
+    navigator.clipboard.writeText(url)
+      .then(() => {
+        toast({
+          title: "Link copied!",
+          description: "The itinerary link has been copied to your clipboard.",
+        })
+      })
+      .catch(() => {
+        toast({
+          title: "Error",
+          description: "Failed to copy the link. Please try again.",
+          variant: "destructive"
+        })
+      })
+  }
+
+  const handleDeleteReview = async (reviewId: number) => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete a review",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete review")
+      }
+
+      // Remove the deleted review from the state
+      setReviews(reviews.filter(review => review.id !== reviewId))
+      setHasReviewed(false)
+      
+      toast({
+        title: "Success",
+        description: "Your review has been deleted!",
+      })
+    } catch (err) {
+      console.error("Error deleting review:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete review",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleEditReview = async (reviewId: number) => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to edit a review",
+        variant: "destructive"
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Token ${token}`
+        },
+        body: JSON.stringify(editReviewData)
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update review")
+      }
+
+      const data = await response.json()
+      setReviews(reviews.map(review => review.id === reviewId ? data : review))
+      setEditingReview(null)
+      setEditReviewData({ rating: 0, comment: '' })
+      
+      toast({
+        title: "Success",
+        description: "Your review has been updated!",
+      })
+    } catch (err) {
+      console.error("Error updating review:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to update review",
+        variant: "destructive"
+      })
+    }
   }
 
   return (
@@ -141,6 +366,13 @@ export default function ItineraryDetailPage() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">{itinerary.name}</h1>
             <div className="flex space-x-2">
+              {itinerary.user?.id.toString() === localStorage.getItem('userId') && (
+                <Link href={`/itinerary/${itinerary.id}/edit`}>
+                  <Button variant="outline" size="icon" aria-label="Edit itinerary">
+                    <Pencil size={20} />
+                  </Button>
+                </Link>
+              )}
               <Button
                 variant="outline"
                 size="icon"
@@ -149,7 +381,12 @@ export default function ItineraryDetailPage() {
               >
                 <Heart className={isFavorite ? "fill-red-500 text-red-500" : ""} size={20} />
               </Button>
-              <Button variant="outline" size="icon" aria-label="Share itinerary">
+              <Button 
+                variant="outline" 
+                size="icon" 
+                aria-label="Share itinerary"
+                onClick={handleShare}
+              >
                 <Share2 size={20} />
               </Button>
             </div>
@@ -170,7 +407,7 @@ export default function ItineraryDetailPage() {
             </div>
           </div>
 
-          <Tabs defaultValue="overview" value="overview">
+          <Tabs defaultValue="overview" onValueChange={setActiveTab}>
             <TabsList className="mb-4">
               <TabsTrigger value="overview">Overview</TabsTrigger>
               <TabsTrigger value="itinerary">Itinerary</TabsTrigger>
@@ -230,35 +467,158 @@ export default function ItineraryDetailPage() {
             </TabsContent>
 
             <TabsContent value="reviews" className="space-y-6">
-              <form onSubmit={handleSubmitReview} className="space-y-4">
-                <h3 className="text-xl font-semibold">Write a Review</h3>
+              {!hasReviewed && (
+                <form onSubmit={handleSubmitReview} className="space-y-4">
+                  <h3 className="text-xl font-semibold">Write a Review</h3>
 
-                <div className="space-y-2">
-                  <Label htmlFor="rating">Rating</Label>
-                  <div className="flex space-x-1">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button key={star} type="button" onClick={() => setRating(star)} className="focus:outline-none">
-                        <Star size={24} className={star <= rating ? "fill-yellow-500 text-yellow-500" : "text-muted"} />
-                      </button>
-                    ))}
+                  <div className="space-y-2">
+                    <Label htmlFor="rating">Rating</Label>
+                    <div className="flex space-x-1">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setNewReview({ ...newReview, rating: star })}
+                          className="focus:outline-none"
+                        >
+                          <Star
+                            size={24}
+                            className={star <= newReview.rating ? "fill-yellow-500 text-yellow-500" : "text-muted"}
+                          />
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="review">Your Review</Label>
-                  <Textarea
-                    id="review"
-                    placeholder="Share your experience with this itinerary..."
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                    rows={4}
-                  />
-                </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="review">Your Review</Label>
+                    <Textarea
+                      id="review"
+                      placeholder="Share your experience with this itinerary..."
+                      value={newReview.comment}
+                      onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
+                      rows={4}
+                      required
+                    />
+                  </div>
 
-                <Button type="submit" disabled={rating === 0 || !reviewText.trim()}>
-                  Submit Review
-                </Button>
-              </form>
+                  <Button type="submit" disabled={newReview.rating === 0 || !newReview.comment.trim()}>
+                    Submit Review
+                  </Button>
+                </form>
+              )}
+
+              <div className="space-y-6">
+                <h3 className="text-xl font-semibold">Reviews</h3>
+                {reviews.length === 0 ? (
+                  <p className="text-muted-foreground">No reviews yet. Be the first to review!</p>
+                ) : (
+                  reviews.map((review) => (
+                    <div key={review.id} className="border rounded-lg p-4">
+                      {editingReview?.id === review.id ? (
+                        <form onSubmit={(e) => {
+                          e.preventDefault()
+                          handleEditReview(review.id)
+                        }} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-rating">Rating</Label>
+                            <div className="flex space-x-1">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  type="button"
+                                  onClick={() => setEditReviewData({ ...editReviewData, rating: star })}
+                                  className="focus:outline-none"
+                                >
+                                  <Star
+                                    size={24}
+                                    className={star <= editReviewData.rating ? "fill-yellow-500 text-yellow-500" : "text-muted"}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="edit-review">Your Review</Label>
+                            <Textarea
+                              id="edit-review"
+                              value={editReviewData.comment}
+                              onChange={(e) => setEditReviewData({ ...editReviewData, comment: e.target.value })}
+                              rows={4}
+                              required
+                            />
+                          </div>
+
+                          <div className="flex space-x-2">
+                            <Button type="submit">Save Changes</Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingReview(null)
+                                setEditReviewData({ rating: 0, comment: '' })
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-medium">
+                                {review.user.first_name} {review.user.last_name}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {new Date(review.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <div className="flex">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    size={16}
+                                    className={i < review.rating ? "fill-yellow-500 text-yellow-500" : "text-muted"}
+                                  />
+                                ))}
+                              </div>
+                              {review.user.id.toString() === localStorage.getItem('userId') && (
+                                <div className="flex space-x-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditingReview(review)
+                                      setEditReviewData({
+                                        rating: review.rating,
+                                        comment: review.comment
+                                      })
+                                    }}
+                                  >
+                                    <Pencil size={16} />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteReview(review.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          <p className="mt-2">{review.comment}</p>
+                        </>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -286,7 +646,7 @@ export default function ItineraryDetailPage() {
               <Button className="w-full" onClick={toggleFavorite}>
                 {isFavorite ? "Remove from Favorites" : "Add to Favorites"}
               </Button>
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full" onClick={handleShare}>
                 Share Itinerary
               </Button>
             </div>
@@ -296,4 +656,3 @@ export default function ItineraryDetailPage() {
     </div>
   )
 }
-
