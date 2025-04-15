@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken)
     localStorage.setItem('user', JSON.stringify(newUser))
+    localStorage.setItem('userId', newUser.id.toString())
+    localStorage.setItem('email', newUser.email)
     setToken(newToken)
     setUser(newUser)
   }
@@ -46,6 +48,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('email')
     setToken(null)
     setUser(null)
     router.push('/login')
