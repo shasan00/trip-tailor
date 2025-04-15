@@ -534,11 +534,11 @@ export default function ItineraryDetailPage() {
                           key={star}
                           type="button"
                           onClick={() => setNewReview({ ...newReview, rating: star })}
-                          className="focus:outline-none"
+                          className="focus:outline-none bg-gray-100 rounded-full p-1"
                         >
                           <Star
                             size={24}
-                            className={star <= newReview.rating ? "fill-yellow-500 text-yellow-500" : "text-muted"}
+                            className={star <= newReview.rating ? "fill-yellow-500 text-yellow-500" : "text-gray-300"}
                           />
                         </button>
                       ))}
