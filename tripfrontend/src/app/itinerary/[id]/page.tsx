@@ -351,6 +351,50 @@ export default function ItineraryDetailPage() {
     }
   }
 
+  const handleDeleteItinerary = async () => {
+    const token = localStorage.getItem('token')
+    if (!token) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to delete an itinerary",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Show confirmation dialog
+    if (!confirm("Are you sure you want to delete this itinerary? This action cannot be undone.")) {
+      return
+    }
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/user/itineraries/${id}/`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Token ${token}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete itinerary")
+      }
+
+      toast({
+        title: "Success",
+        description: "Itinerary deleted successfully!",
+      })
+
+      router.push('/')
+    } catch (err) {
+      console.error("Error deleting itinerary:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to delete itinerary",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <div className="container py-8">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -367,11 +411,22 @@ export default function ItineraryDetailPage() {
             <h1 className="text-3xl font-bold">{itinerary.name}</h1>
             <div className="flex space-x-2">
               {itinerary.user?.id.toString() === localStorage.getItem('userId') && (
-                <Link href={`/itinerary/${itinerary.id}/edit`}>
-                  <Button variant="outline" size="icon" aria-label="Edit itinerary">
-                    <Pencil size={20} />
+                <>
+                  <Link href={`/itinerary/${itinerary.id}/edit`}>
+                    <Button variant="outline" size="icon" aria-label="Edit itinerary">
+                      <Pencil size={20} />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleDeleteItinerary}
+                    aria-label="Delete itinerary"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 size={20} />
                   </Button>
-                </Link>
+                </>
               )}
               <Button
                 variant="outline"
