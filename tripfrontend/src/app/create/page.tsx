@@ -174,8 +174,8 @@ export default function CreateItineraryPage() {
         throw new Error(errorData?.detail || errorData?.error || "Failed to create itinerary")
       }
 
-      const newItinerary = await response.json()
-      setItineraryId(newItinerary.id)
+      //const newItinerary = await response.json()
+      setItineraryId(errorData.id)
       
       alert("Itinerary created successfully!")
       // Don't redirect yet, let the user publish if they want to
@@ -234,7 +234,7 @@ export default function CreateItineraryPage() {
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={(e) => {handleSubmit(e); handlePublish();}}>
           <TabsContent value="details" className="space-y-6">
             <Card>
               <CardContent className="pt-6">
