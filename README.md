@@ -68,10 +68,10 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
     *   Create a `.env` file in the `tripbackend` directory.
     *   Add necessary backend environment variables, such as:
         ```env
-        SECRET_KEY='your_django_secret_key'
+        GOOGLE_MAPS_API_KEY='your_google_maps_api_key'
         # Add other variables like database URLs if not using SQLite, OpenAI key, etc.
         ```
-    *   *Note:* A strong `SECRET_KEY` is crucial for production.
+    *
 
 ### Frontend Setup (`tripfrontend`)
 
