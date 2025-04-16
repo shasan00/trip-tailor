@@ -6,13 +6,17 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
-from .models import Itinerary, ItineraryDay, ItineraryPhoto, Review
+from .models import Itinerary, ItineraryDay, ItineraryPhoto, Review, Stop
 from .serializers import (
     ItinerarySerializer, UserRegistrationSerializer,
     ItineraryDaySerializer, ItineraryPhotoSerializer,
     ReviewSerializer
 )
 import json
+import logging
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 @api_view(['GET'])
@@ -101,17 +105,69 @@ def user_itineraries(request):
     
     elif request.method == 'POST':
         try:
+            logger.info(f"Creating itinerary for user: {request.user.username}")
+            # Copy request data to make it mutable
             data = request.data.copy()
-            # Parse the days JSON string if it exists
-            if 'days' in data and isinstance(data['days'], str):
-                data['days'] = json.loads(data['days'])
+            logger.info(f"Raw request data: {data}")
             
+            # Process additional photos if any
+            additional_photos_count = data.get('additional_photos_count')
+            if additional_photos_count:
+                try:
+                    additional_photos_count = int(additional_photos_count)
+                    logger.info(f"Processing {additional_photos_count} additional photos")
+                except ValueError:
+                    logger.error(f"Invalid additional_photos_count: {additional_photos_count}")
+                    additional_photos_count = 0
+            else:
+                additional_photos_count = 0
+            
+            # Parse the days JSON string if it exists and is a string
+            parsed_days = None # Initialize parsed_days
+            if 'days' in data and isinstance(data['days'], str):
+                try:
+                    parsed_days = json.loads(data['days'])
+                    logger.info(f"Parsed days data: {parsed_days}")
+                    # *** Remove days from the data dict before validation ***
+                    del data['days'] 
+                except json.JSONDecodeError as e:
+                    logger.error(f"JSON decode error for days data: {e}")
+                    return Response({'days': ['Invalid JSON format.']}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                logger.info(f"Days data not found or not a string: {data.get('days', 'None')}")
+            
+            # Pass the data *without* days to the serializer
+            logger.info(f"Data being passed to serializer for validation: {data}")
             serializer = ItinerarySerializer(data=data, context={'request': request})
+            
             if serializer.is_valid():
-                serializer.save(user=request.user)
+                logger.info(f"Serializer is valid. Validated data: {serializer.validated_data}")
+                # *** Pass the parsed_days data to the save method ***
+                itinerary = serializer.save(user=request.user, days_data=parsed_days)
+                logger.info(f"Itinerary saved with ID: {itinerary.id}")
+                
+                # Process and save additional photos
+                for i in range(additional_photos_count):
+                    photo_key = f'additional_photo_{i}'
+                    if photo_key in request.FILES:
+                        photo_file = request.FILES[photo_key]
+                        logger.info(f"Processing additional photo {i}: {photo_file.name}")
+                        try:
+                            photo = ItineraryPhoto.objects.create(
+                                itinerary=itinerary,
+                                image=photo_file,
+                                caption=f"Photo {i+1}"
+                            )
+                            logger.info(f"Created additional photo with ID: {photo.id}")
+                        except Exception as e:
+                            logger.error(f"Error creating additional photo {i}: {e}")
+                
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+            logger.error(f"Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
+            logger.exception(f"Error in user_itineraries POST: {e}")
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -125,24 +181,70 @@ def itinerary_detail(request, pk):
         return Response(status=status.HTTP_404_NOT_FOUND)
 
     if request.method == 'GET':
-        serializer = ItinerarySerializer(itinerary)
+        serializer = ItinerarySerializer(itinerary, context={'request': request})
         return Response(serializer.data)
 
     elif request.method == 'PUT':
-        # Only allow the creator to edit
         if itinerary.user != request.user:
-            return Response(status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
 
-        serializer = ItinerarySerializer(itinerary, data=request.data, partial=True)
+        logger.info(f"Updating itinerary {pk} for user: {request.user.username}")
+        # Copy request data to make it mutable
+        data = request.data.copy()
+        logger.info(f"Raw update request data: {data}")
+        
+        # Process additional photos if any
+        additional_photos_count = data.get('additional_photos_count')
+        if additional_photos_count:
+            try:
+                additional_photos_count = int(additional_photos_count)
+                logger.info(f"Processing {additional_photos_count} additional photos")
+            except ValueError:
+                logger.error(f"Invalid additional_photos_count: {additional_photos_count}")
+                additional_photos_count = 0
+        else:
+            additional_photos_count = 0
+        
+        # Parse the days JSON string if it exists and is a string
+        if 'days' in data and isinstance(data['days'], str):
+            try:
+                data['days'] = json.loads(data['days'])
+                logger.info(f"Parsed days data: {data['days']}")
+            except json.JSONDecodeError:
+                logger.error(f"JSON decode error for days data")
+                return Response({'days': ['Invalid JSON format.']}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Pass the potentially modified data dict to the serializer
+        logger.info(f"Data being passed to serializer for update: {data}")
+        serializer = ItinerarySerializer(itinerary, data=data, partial=True, context={'request': request})
         if serializer.is_valid():
+            logger.info(f"Serializer is valid for update. Validated data: {serializer.validated_data}")
             serializer.save()
+            
+            # Process and save additional photos
+            for i in range(additional_photos_count):
+                photo_key = f'additional_photo_{i}'
+                if photo_key in request.FILES:
+                    photo_file = request.FILES[photo_key]
+                    logger.info(f"Processing additional photo {i}: {photo_file.name}")
+                    try:
+                        photo = ItineraryPhoto.objects.create(
+                            itinerary=itinerary,
+                            image=photo_file,
+                            caption=f"Photo {i+1}"
+                        )
+                        logger.info(f"Created additional photo with ID: {photo.id}")
+                    except Exception as e:
+                        logger.error(f"Error creating additional photo {i}: {e}")
+            
             return Response(serializer.data)
+        
+        logger.error(f"Serializer errors for update: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     elif request.method == 'DELETE':
-        # Only allow the creator to delete
         if itinerary.user != request.user:
-            return Response(status=status.HTTP_403_FORBIDDEN)
+            return Response({'detail': 'You do not have permission to perform this action.'}, status=status.HTTP_403_FORBIDDEN)
             
         itinerary.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

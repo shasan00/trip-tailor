@@ -32,11 +32,14 @@ interface Itinerary {
     day_number: number
     title: string
     description: string
-    activities: Array<{
+    stops: Array<{
+      id: number
       name: string
       description: string
-      type: string
-      location: string
+      stop_type: string
+      latitude: string
+      longitude: string
+      order: number
     }>
   }>
 }
@@ -92,6 +95,22 @@ export default function ItineraryDetailPage() {
         }
         const data = await response.json()
         console.log("API Response:", data)
+        
+        // Check for missing or empty days array and handle it
+        if (!data.days) {
+          console.log("No days data found in API response, adding empty array")
+          data.days = []
+        }
+        
+        // Ensure each day has a stops array
+        data.days.forEach((day: {day_number: number, stops?: any[]}) => {
+          if (!day.stops) {
+            console.log(`No stops array for day ${day.day_number}, adding empty array`)
+            day.stops = []
+          }
+        })
+        
+        console.log("Processed itinerary data:", data)
         console.log("Current user from localStorage:", localStorage.getItem('username'))
         console.log("Itinerary user:", data.user?.username)
         console.log("Should show edit button:", data.user?.id.toString() === localStorage.getItem('userId'))
@@ -491,25 +510,25 @@ export default function ItineraryDetailPage() {
             </TabsContent>
 
             <TabsContent value="itinerary" className="space-y-6">
-              {itinerary.days.map((day) => (
+              {itinerary.days && itinerary.days.map((day) => (
                 <div key={day.day_number} className="space-y-4">
                   <h3 className="text-xl font-semibold">Day {day.day_number}</h3>
-                  {day.activities.length > 0 ? (
+                  {day.stops && day.stops.length > 0 ? (
                     <div className="space-y-4">
-                      {day.activities.map((activity, index) => (
+                      {day.stops.map((stop, index) => (
                         <div key={index} className="border rounded-lg p-4">
                           <div className="flex justify-between">
-                            <h4 className="font-medium">{activity.name}</h4>
+                            <h4 className="font-medium">{stop.name}</h4>
                             <span className="text-xs px-2 py-1 bg-muted rounded-full">
-                              {activity.type.charAt(0).toUpperCase() + activity.type.slice(1)}
+                              {stop.stop_type.charAt(0).toUpperCase() + stop.stop_type.slice(1)}
                             </span>
                           </div>
-                          <p className="text-sm text-muted-foreground mt-2">{activity.description}</p>
+                          <p className="text-sm text-muted-foreground mt-2">{stop.description}</p>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">No activities planned for this day.</p>
+                    <p className="text-muted-foreground">No stops planned for this day.</p>
                   )}
                 </div>
               ))}

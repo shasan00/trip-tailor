@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -10,7 +10,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { PlusCircle, Trash2, MapPin } from "lucide-react"
+import { PlusCircle, Trash2, MapPin, AlertCircle } from "lucide-react"
+import { useJsApiLoader, Autocomplete } from '@react-google-maps/api'
 
 interface Stop {
   id: string
@@ -22,7 +23,30 @@ interface Stop {
   location: {
     lat: number
     lng: number
+    address?: string
   }
+}
+
+// Define types for Google Maps Autocomplete instance
+type AutocompleteInstance = google.maps.places.Autocomplete;
+
+// Libraries needed for Google Maps API
+const libraries: ('places')[] = ['places'];
+
+// Define types for form validation errors
+interface ValidationErrors {
+  title?: string;
+  destination?: string;
+  description?: string;
+  image?: string;
+  itineraryCoordinates?: string;
+  stops?: {
+    [stopId: string]: {
+      name?: string;
+      location?: string;
+    }
+  };
+  general?: string; // For general form errors
 }
 
 export default function CreateItineraryPage() {
@@ -36,9 +60,30 @@ export default function CreateItineraryPage() {
   const [currentTab, setCurrentTab] = useState("details")
   const [image, setImage] = useState<File | null>(null)
   const [additionalPhotos, setAdditionalPhotos] = useState<File[]>([])
-  const [itineraryId, setItineraryId] = useState<number | null>(null)
+
+  // --- Add back file input refs --- 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const additionalPhotosRef = useRef<HTMLInputElement>(null)
+  // --- End add back file input refs --- 
+
+  // --- Google Maps State and Refs --- 
+  const [itineraryLatitude, setItineraryLatitude] = useState<number | null>(null)
+  const [itineraryLongitude, setItineraryLongitude] = useState<number | null>(null)
+  // Refs to store Autocomplete instances
+  const autocompleteRef = useRef<AutocompleteInstance | null>(null);
+  const stopAutocompleteRefs = useRef<Record<string, AutocompleteInstance | null>>({});
+  // --- End Google Maps State and Refs ---
+
+  // --- Load Google Maps API Script --- 
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries: libraries, 
+  })
+  // --- End Load Google Maps API Script --- 
+
+  // Add validation errors state
+  const [errors, setErrors] = useState<ValidationErrors>({});
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
 
   const addStop = (day: number) => {
     const newStop: Stop = {
@@ -48,17 +93,35 @@ export default function CreateItineraryPage() {
       type: "activity",
       day,
       order: stops.filter((s) => s.day === day).length + 1,
-      location: { lat: 0, lng: 0 },
+      location: { lat: 0, lng: 0, address: '' },
     }
 
     setStops([...stops, newStop])
   }
 
-  const updateStop = (id: string, field: keyof Stop, value: any) => {
-    setStops(stops.map((stop) => (stop.id === id ? { ...stop, [field]: value } : stop)))
-  }
+  const updateStop = useCallback((id: string, field: keyof Stop | `location.${keyof Stop['location']}`, value: any) => {
+    setStops(prevStops =>
+      prevStops.map(stop => {
+        if (stop.id === id) {
+          if (field.startsWith('location.')) {
+            const locField = field.split('.')[1] as keyof Stop['location'];
+            return {
+              ...stop,
+              location: { ...stop.location, [locField]: value },
+            };
+          } else {
+            return { ...stop, [field as keyof Stop]: value };
+          }
+        }
+        return stop;
+      })
+    );
+  }, []);
 
   const removeStop = (id: string) => {
+    if (stopAutocompleteRefs.current[id]) {
+      delete stopAutocompleteRefs.current[id];
+    }
     setStops(stops.filter((stop) => stop.id !== id))
   }
 
@@ -74,67 +137,252 @@ export default function CreateItineraryPage() {
     }
   }
 
+  // --- Autocomplete Handlers --- 
+  const handleDestinationLoad = (instance: AutocompleteInstance) => {
+    autocompleteRef.current = instance;
+  };
+
+  const handleDestinationPlaceChanged = () => {
+    if (autocompleteRef.current) {
+      const place = autocompleteRef.current.getPlace();
+      if (place.geometry && place.geometry.location) {
+        setItineraryLatitude(place.geometry.location.lat());
+        setItineraryLongitude(place.geometry.location.lng());
+        setDestination(place.formatted_address || place.name || '');
+        console.log('Destination selected:', place.formatted_address);
+        console.log('Coordinates:', place.geometry.location.lat(), place.geometry.location.lng());
+      } else {
+        console.log('No geometry found for selected place');
+        setItineraryLatitude(null);
+        setItineraryLongitude(null);
+      }
+    } else {
+      console.error('Autocomplete instance is not available.');
+    }
+  };
+
+  const handleStopLoad = (instance: AutocompleteInstance, stopId: string) => {
+    stopAutocompleteRefs.current[stopId] = instance;
+  };
+
+  const handleStopPlaceChanged = (stopId: string) => {
+    const instance = stopAutocompleteRefs.current[stopId];
+    if (instance) {
+      const place = instance.getPlace();
+      if (place.geometry && place.geometry.location) {
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const address = place.formatted_address || place.name || '';
+        updateStop(stopId, 'location.lat', lat);
+        updateStop(stopId, 'location.lng', lng);
+        updateStop(stopId, 'location.address', address);
+        console.log(`Stop ${stopId} location:`, address, lat, lng);
+      } else {
+        console.log(`No geometry found for stop ${stopId}`);
+        updateStop(stopId, 'location.lat', 0);
+        updateStop(stopId, 'location.lng', 0);
+        updateStop(stopId, 'location.address', '');
+      }
+    } else {
+      console.error(`Stop Autocomplete instance ${stopId} is not available.`);
+    }
+  };
+  // --- End Autocomplete Handlers ---
+
+  // Mark a field as touched when it loses focus
+  const handleBlur = (field: string) => {
+    setTouched(prev => ({ ...prev, [field]: true }));
+  };
+
+  // Mark a stop field as touched
+  const handleStopBlur = (stopId: string, field: string) => {
+    setTouched(prev => ({ ...prev, [`stop_${stopId}_${field}`]: true }));
+  };
+
+  // Validate form fields
+  const validateForm = (): boolean => {
+    const newErrors: ValidationErrors = {};
+    
+    // Basic field validation
+    if (!title.trim()) {
+      newErrors.title = 'Title is required';
+    }
+    
+    if (!destination.trim()) {
+      newErrors.destination = 'Destination is required';
+    }
+    
+    if (!description.trim()) {
+      newErrors.description = 'Description is required';
+    }
+    
+    if (!image) {
+      newErrors.image = 'Cover image is required';
+    }
+    
+    if (itineraryLatitude === null || itineraryLongitude === null) {
+      newErrors.itineraryCoordinates = 'Please select a valid destination using the search';
+    }
+    
+    // Validate stops - check if each day has at least one valid stop
+    const stopErrors: ValidationErrors['stops'] = {};
+    const stopsPerDay = Array.from({ length: duration }).map((_, index) => {
+      const dayNumber = index + 1;
+      return stops.filter(stop => stop.day === dayNumber);
+    });
+    
+    // Check each stop has name and location
+    stops.forEach(stop => {
+      if (!stop.name.trim()) {
+        if (!stopErrors[stop.id]) stopErrors[stop.id] = {};
+        stopErrors[stop.id]!.name = 'Stop name is required';
+      }
+      
+      if (stop.location.lat === 0 && stop.location.lng === 0) {
+        if (!stopErrors[stop.id]) stopErrors[stop.id] = {};
+        stopErrors[stop.id]!.location = 'Please select a valid location';
+      }
+    });
+    
+    if (Object.keys(stopErrors).length > 0) {
+      newErrors.stops = stopErrors;
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Helper function to find the first tab with errors
+  const findTabWithErrors = (errors: ValidationErrors): string => {
+    // Check detail tab fields (title, destination, description)
+    if (errors.title || errors.destination || errors.description || errors.itineraryCoordinates) {
+      return 'details';
+    }
+    
+    // Check itinerary tab fields (stops)
+    if (errors.stops && Object.keys(errors.stops).length > 0) {
+      return 'itinerary';
+    }
+    
+    // Check photos tab fields (image)
+    if (errors.image) {
+      return 'photos';
+    }
+    
+    // Default to the current tab if no specific errors found
+    return currentTab;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     
-    const token = localStorage.getItem('token')
-    console.log("Token from localStorage:", token)
+    // Mark all fields as touched to show all validation errors
+    const allFields = ['title', 'destination', 'description', 'image'];
+    const allStopFields = stops.flatMap(stop => 
+      [`stop_${stop.id}_name`, `stop_${stop.id}_location`]
+    );
     
-    if (!token) {
-      alert("You must be logged in to create an itinerary. Please log in and try again.")
-      window.location.href = "/login" // Redirect to login page
-      return
+    const allTouched = [...allFields, ...allStopFields].reduce(
+      (acc, field) => ({ ...acc, [field]: true }), {}
+    );
+    
+    setTouched(allTouched);
+    
+    // Validate all fields before submission
+    if (!validateForm()) {
+      // Find which tab has errors and navigate to it
+      const tabWithErrors = findTabWithErrors(errors);
+      if (tabWithErrors !== currentTab) {
+        setCurrentTab(tabWithErrors);
+        console.log(`Navigating to ${tabWithErrors} tab due to validation errors`);
+      }
+      
+      // After tab navigation and re-render, scroll to the first visible error
+      setTimeout(() => {
+        const firstErrorElement = document.querySelector('.error-message');
+        if (firstErrorElement) {
+          firstErrorElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100); // Small timeout to ensure tab switch is completed
+      
+      return;
     }
 
-    if (!image) {
-      alert("Please upload a cover image for the itinerary")
-      return
+    const token = localStorage.getItem('token');
+    if (!token) {
+      console.error('User not logged in.');
+      window.location.href = '/login';
+      return;
     }
-    
+
     try {
-      // First, create a FormData instance
       const formData = new FormData()
-      
+
       // Add basic fields
       formData.append('name', title)
-      formData.append('description', description) // This should be a string
+      formData.append('description', description)
       formData.append('duration', duration.toString())
-      formData.append('destination', destination)
+      formData.append('destination', destination) 
+      
+      if (itineraryLatitude !== null) {
+        formData.append('latitude', itineraryLatitude.toFixed(6));
+      } 
+      if (itineraryLongitude !== null) {
+        formData.append('longitude', itineraryLongitude.toFixed(6));
+      }
       formData.append('price', (price.length * 100).toString())
-      formData.append('status', 'draft')
-      
-      // Add cover image
-      formData.append('image', image)
-      
-      // Add additional photos
-      additionalPhotos.forEach((photo) => {
-        formData.append('photos', photo)
-      })
-      
-      // Create days array
-      const daysData = Array.from({ length: duration }).map((_, index) => ({
-        day_number: index + 1,
-        title: `Day ${index + 1}`,
-        description: "",
-        activities: stops
-          .filter(stop => stop.day === index + 1)
+      formData.append('status', 'published')
+
+      // Fix: Add null check for image
+      if (image) {
+        formData.append('image', image)
+      }
+      // The validateForm() function already checks if image exists before allowing submission
+
+      // Add any additional photos
+      if (additionalPhotos.length > 0) {
+        // We can't directly append an array of files, so we append them individually
+        additionalPhotos.forEach((photo, index) => {
+          formData.append(`additional_photo_${index}`, photo);
+        });
+        // Add a count so the backend knows how many photos to process
+        formData.append('additional_photos_count', additionalPhotos.length.toString());
+      }
+
+      // Create days array with nested stops
+      const daysData = Array.from({ length: duration }).map((_, index) => {
+        const dayNumber = index + 1
+        const stopsForDay = stops
+          .filter(stop => stop.day === dayNumber)
           .map(stop => ({
             name: stop.name,
             description: stop.description,
-            type: stop.type,
-            location: stop.location
+            stop_type: stop.type,
+            latitude: stop.location.lat !== 0 ? stop.location.lat.toFixed(6) : "0.000000",
+            longitude: stop.location.lng !== 0 ? stop.location.lng.toFixed(6) : "0.000000",
+            location_name: stop.location.address || `Location at ${stop.location.lat}, ${stop.location.lng}`,
+            order: stop.order
           }))
-      }))
-      
-      // Add days as JSON string
+
+        return {
+          day_number: dayNumber,
+          title: `Day ${dayNumber}`,
+          description: '',
+          stops: stopsForDay
+        }
+      })
+
+      // Ensure we send days data even if it's an empty array
+      // This triggers our backend to create default days
       formData.append('days', JSON.stringify(daysData))
 
-      // Log the form data for debugging
-      console.log("Form data being sent:")
+      console.log('Form data being sent (days stringified):')
       for (let [key, value] of formData.entries()) {
-        console.log(`${key}:`, value)
+        console.log(`${key}:`, value instanceof File ? value.name : value)
       }
+      console.log("Checking formData just before fetch:", formData.get('days'));
 
+      // Fetch Call
       const response = await fetch("http://localhost:8000/api/user/itineraries/", {
         method: "POST",
         headers: {
@@ -143,88 +391,77 @@ export default function CreateItineraryPage() {
         body: formData
       })
 
+      // Response Handling
       console.log("Response status:", response.status)
       console.log("Response headers:", Object.fromEntries(response.headers.entries()))
 
-      let errorData;
-      try {
-        errorData = await response.json()
-        console.log("Response data:", errorData)
-      } catch (e) {
-        console.error("Failed to parse response as JSON:", e)
-      }
-
       if (response.status === 401) {
-        // Token is invalid or expired
-        localStorage.removeItem('token') // Clear the invalid token
-        alert("Your session has expired. Please log in again.")
+        localStorage.removeItem('token') 
+        // Remove alert
+        console.error('Session expired. Redirecting to login.');
         window.location.href = "/login"
         return
       }
-
+      
+      // Check if response is ok AFTER handling 401
       if (!response.ok) {
-        // Log the specific validation errors if they exist
-        if (errorData) {
-          console.error("Validation errors:", errorData)
-          const errorMessages = Object.entries(errorData)
-            .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
-            .join('\n')
-          throw new Error(`Validation errors:\n${errorMessages}`)
-        }
-        throw new Error(errorData?.detail || errorData?.error || "Failed to create itinerary")
+          let errorData;
+          try {
+              errorData = await response.json();
+              console.error("Validation errors:", errorData);
+              const errorMessages = Object.entries(errorData)
+                  .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+                  .join('\n');
+              throw new Error(`Validation errors:\n${errorMessages}`);
+          } catch (e) {
+              // If parsing JSON failed, try reading as text
+              console.error("Failed to parse error response as JSON:", e);
+              const textError = await response.text();
+              console.error("Response text:", textError);
+              throw new Error(`Server error: ${response.status} - ${textError || 'Failed to create itinerary'}`);
+          }
       }
 
-      //const newItinerary = await response.json()
-      setItineraryId(errorData.id)
-      
-      alert("Itinerary created successfully!")
-      // Don't redirect yet, let the user publish if they want to
+      // --- Change: Redirect on success, remove alert and setItineraryId --- 
+      console.log("Itinerary created and published successfully!")
+      window.location.href = "/search" // Redirect immediately
+
     } catch (error) {
-      console.error("Full error:", error)
-      alert("Error creating itinerary: " + (error instanceof Error ? error.message : "Unknown error"))
+      console.error('Full error:', error)
+      setErrors(prev => ({ 
+        ...prev, 
+        general: error instanceof Error ? error.message : 'Unknown error occurred' 
+      }));
     }
   }
 
-  const handlePublish = async () => {
-    if (!itineraryId) {
-      alert("Please create the itinerary first")
-      return
-    }
+  // Error message component
+  const ErrorMessage = ({ children }: { children: React.ReactNode }) => (
+    <div className="flex items-center gap-1 text-red-500 text-sm mt-1 error-message">
+      <AlertCircle size={14} />
+      <span>{children}</span>
+    </div>
+  );
 
-    const token = localStorage.getItem('token')
-    if (!token) {
-      alert("You must be logged in to publish an itinerary")
-      return
-    }
+  if (loadError) {
+    return <div>Error loading Google Maps: {loadError.message}</div>;
+  }
 
-    try {
-      const response = await fetch(`http://localhost:8000/api/user/itineraries/${itineraryId}/publish/`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Token ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Failed to publish itinerary")
-      }
-
-      const updatedItinerary = await response.json()
-      console.log("Published itinerary:", updatedItinerary)
-      
-      alert("Itinerary published successfully!")
-      window.location.href = "/search" // Redirect to search page
-    } catch (error) {
-      console.error("Error publishing itinerary:", error)
-      alert("Error publishing itinerary: " + (error instanceof Error ? error.message : "Unknown error"))
-    }
+  if (!isLoaded) {
+    return <div>Loading...</div>; // Or a loading spinner
   }
 
   return (
     <div className="container py-8">
       <h1 className="text-3xl font-bold mb-8">Create New Itinerary</h1>
+
+      {/* Display general form error if any */}
+      {errors.general && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-6">
+          <p className="font-medium">Error:</p>
+          <p>{errors.general}</p>
+        </div>
+      )}
 
       <Tabs value={currentTab} onValueChange={setCurrentTab}>
         <TabsList className="mb-8">
@@ -234,31 +471,47 @@ export default function CreateItineraryPage() {
           <TabsTrigger value="preview">Preview</TabsTrigger>
         </TabsList>
 
-        <form onSubmit={(e) => {handleSubmit(e); handlePublish();}}>
+        <form onSubmit={handleSubmit}>
           <TabsContent value="details" className="space-y-6">
             <Card>
               <CardContent className="pt-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="title">Title</Label>
+                    <Label htmlFor="title" className={errors.title && touched.title ? "text-red-500" : ""}>
+                      Title*
+                    </Label>
                     <Input
                       id="title"
                       placeholder="e.g. Weekend in Paris"
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
+                      onBlur={() => handleBlur('title')}
+                      className={errors.title && touched.title ? "border-red-500 focus-visible:ring-red-500" : ""}
                       required
                     />
+                    {errors.title && touched.title && <ErrorMessage>{errors.title}</ErrorMessage>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="destination">Destination</Label>
-                    <Input
-                      id="destination"
-                      placeholder="e.g. Paris, France"
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="destination" className={errors.destination && touched.destination ? "text-red-500" : ""}>
+                      Destination*
+                    </Label>
+                    <Autocomplete
+                      onLoad={handleDestinationLoad}
+                      onPlaceChanged={handleDestinationPlaceChanged}
+                      options={{ types: ['(cities)'] }}
+                      fields={['geometry.location', 'formatted_address', 'name']}
+                    >
+                      <Input
+                        id="destination"
+                        placeholder="Search for a destination city"
+                        onBlur={() => handleBlur('destination')}
+                        className={errors.destination && touched.destination ? "border-red-500 focus-visible:ring-red-500" : ""}
+                        required
+                      />
+                    </Autocomplete>
+                    {errors.destination && touched.destination && <ErrorMessage>{errors.destination}</ErrorMessage>}
+                    {errors.itineraryCoordinates && touched.destination && <ErrorMessage>{errors.itineraryCoordinates}</ErrorMessage>}
                   </div>
 
                   <div className="space-y-2">
@@ -304,28 +557,21 @@ export default function CreateItineraryPage() {
                     </div>
                   </div>
 
-                  {/* <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="shortDescription">Short Description</Label>
-                    <Input
-                      id="shortDescription"
-                      placeholder="A brief summary of your itinerary (max 100 characters)"
-                      value={shortDescription}
-                      onChange={(e) => setShortDescription(e.target.value)}
-                      maxLength={100}
-                      required
-                    />
-                  </div> */}
-
                   <div className="space-y-2 md:col-span-2">
-                    <Label htmlFor="description">Full Description</Label>
+                    <Label htmlFor="description" className={errors.description && touched.description ? "text-red-500" : ""}>
+                      Full Description*
+                    </Label>
                     <Textarea
                       id="description"
                       placeholder="Provide a detailed description of your itinerary"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
+                      onBlur={() => handleBlur('description')}
+                      className={errors.description && touched.description ? "border-red-500 focus-visible:ring-red-500" : ""}
                       rows={6}
                       required
                     />
+                    {errors.description && touched.description && <ErrorMessage>{errors.description}</ErrorMessage>}
                   </div>
                 </div>
               </CardContent>
@@ -352,14 +598,24 @@ export default function CreateItineraryPage() {
                       <div key={stop.id} className="border rounded-lg p-4 mb-4">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                           <div className="space-y-2">
-                            <Label htmlFor={`stop-name-${stop.id}`}>Name</Label>
+                            <Label 
+                              htmlFor={`stop-name-${stop.id}`}
+                              className={errors.stops?.[stop.id]?.name && touched[`stop_${stop.id}_name`] ? "text-red-500" : ""}
+                            >
+                              Name*
+                            </Label>
                             <Input
                               id={`stop-name-${stop.id}`}
                               placeholder="e.g. Eiffel Tower"
                               value={stop.name}
-                              onChange={(e) => updateStop(stop.id, "name", e.target.value)}
+                              onChange={(e) => updateStop(stop.id, 'name', e.target.value)}
+                              onBlur={() => handleStopBlur(stop.id, 'name')}
+                              className={errors.stops?.[stop.id]?.name && touched[`stop_${stop.id}_name`] ? "border-red-500 focus-visible:ring-red-500" : ""}
                               required
                             />
+                            {errors.stops?.[stop.id]?.name && touched[`stop_${stop.id}_name`] && 
+                              <ErrorMessage>{errors.stops[stop.id].name}</ErrorMessage>
+                            }
                           </div>
 
                           <div className="space-y-2">
@@ -378,13 +634,29 @@ export default function CreateItineraryPage() {
                           </div>
 
                           <div className="space-y-2 md:col-span-2">
-                            <Label>Location</Label>
-                            <div className="flex items-center space-x-2">
-                              <Input placeholder="Search for a location" className="flex-1" />
-                              <Button type="button" variant="outline" size="icon">
-                                <MapPin size={16} />
-                              </Button>
-                            </div>
+                            <Label 
+                              htmlFor={`stop-location-${stop.id}`}
+                              className={errors.stops?.[stop.id]?.location && touched[`stop_${stop.id}_location`] ? "text-red-500" : ""}
+                            >
+                              Location*
+                            </Label>
+                            <Autocomplete
+                              onLoad={(instance) => handleStopLoad(instance, stop.id)}
+                              onPlaceChanged={() => handleStopPlaceChanged(stop.id)}
+                              fields={['geometry.location', 'formatted_address', 'name']}
+                            >
+                              <Input
+                                id={`stop-location-${stop.id}`}
+                                placeholder="Search for location (e.g., address, POI)"
+                                defaultValue={stop.location.address || ''}
+                                onBlur={() => handleStopBlur(stop.id, 'location')}
+                                className={errors.stops?.[stop.id]?.location && touched[`stop_${stop.id}_location`] ? "border-red-500 focus-visible:ring-red-500" : ""}
+                                required
+                              />
+                            </Autocomplete>
+                            {errors.stops?.[stop.id]?.location && touched[`stop_${stop.id}_location`] && 
+                              <ErrorMessage>{errors.stops[stop.id].location}</ErrorMessage>
+                            }
                           </div>
 
                           <div className="space-y-2 md:col-span-3">
@@ -431,7 +703,12 @@ export default function CreateItineraryPage() {
               <CardContent className="pt-6">
                 <div className="space-y-6">
                   <div className="space-y-2">
-                    <Label htmlFor="cover-image">Cover Image</Label>
+                    <Label 
+                      htmlFor="cover-image"
+                      className={errors.image && touched.image ? "text-red-500" : ""}
+                    >
+                      Cover Image*
+                    </Label>
                     <p className="text-sm text-muted-foreground">
                       Upload a cover image that represents your itinerary. This will be the main image shown in listings.
                     </p>
@@ -440,9 +717,12 @@ export default function CreateItineraryPage() {
                       type="file"
                       accept="image/*"
                       onChange={handleImageChange}
+                      onBlur={() => handleBlur('image')}
+                      className={errors.image && touched.image ? "border-red-500 focus-visible:ring-red-500" : ""}
                       ref={fileInputRef}
                       required
                     />
+                    {errors.image && touched.image && <ErrorMessage>{errors.image}</ErrorMessage>}
                     {image && (
                       <div className="mt-2">
                         <img 
@@ -573,7 +853,7 @@ export default function CreateItineraryPage() {
               <Button type="button" variant="outline" onClick={() => setCurrentTab("photos")}>
                 Back: Photos
               </Button>
-              <Button type="submit">Publish Itinerary</Button>
+              <Button type="submit">Create & Publish Itinerary</Button>
             </div>
           </TabsContent>
         </form>

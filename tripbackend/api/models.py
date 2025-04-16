@@ -15,6 +15,8 @@ class Itinerary(models.Model):
     duration = models.IntegerField(help_text="Duration in days")
     image = models.ImageField(upload_to='itineraries/', null=True, blank=True)
     destination = models.CharField(max_length=100)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     rating = models.DecimalField(max_digits=3, decimal_places=1, default=0)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='draft')
@@ -29,7 +31,6 @@ class ItineraryDay(models.Model):
     day_number = models.IntegerField()
     title = models.CharField(max_length=100)
     description = models.TextField()
-    activities = models.JSONField(default=list)
 
     class Meta:
         ordering = ['day_number']
@@ -37,6 +38,30 @@ class ItineraryDay(models.Model):
 
     def __str__(self):
         return f"Day {self.day_number} - {self.title}"
+
+class Stop(models.Model):
+    STOP_TYPE_CHOICES = [
+        ('activity', 'Activity'),
+        ('food', 'Food'),
+        ('accommodation', 'Accommodation'),
+        ('transport', 'Transport'),
+        ('other', 'Other'),
+    ]
+
+    itinerary_day = models.ForeignKey(ItineraryDay, on_delete=models.CASCADE, related_name='stops')
+    name = models.CharField(max_length=150)
+    description = models.TextField(blank=True)
+    stop_type = models.CharField(max_length=20, choices=STOP_TYPE_CHOICES, default='other')
+    location_name = models.CharField(max_length=255, default='')
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    order = models.PositiveIntegerField(default=0, help_text="Order of the stop within the day")
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.get_stop_type_display()}: {self.name} (Day {self.itinerary_day.day_number})"
 
 class ItineraryPhoto(models.Model):
     itinerary = models.ForeignKey(Itinerary, on_delete=models.CASCADE, related_name='photos')
