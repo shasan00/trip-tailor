@@ -18,12 +18,11 @@ export function FloatingChatButton() {
           </Button>
         </DialogTrigger>
       </div>
-      <DialogContent className="sm:max-w-md p-0 h-[600px]">
-        <div className="flex flex-col h-full">
+      <DialogContent className="sm:max-w-md p-0 flex flex-col h-[600px] max-h-[80vh] overflow-hidden">
+        <div className="flex flex-col h-full overflow-hidden">
           <AIChatbot />
         </div>
       </DialogContent>
     </Dialog>
   )
 }
-
