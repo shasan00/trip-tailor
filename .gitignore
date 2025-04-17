@@ -21,6 +21,7 @@ db.sqlite3
 media/
 
 # OS generated files
+*/.DS_Store
 .DS_Store
 .DS_Store?
 ._*
