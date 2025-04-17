@@ -483,8 +483,8 @@ export default function ItineraryDetailPage() {
               <span>{itinerary.duration} days</span>
             </div>
             <div className="flex items-center text-muted-foreground">
-              <DollarSign size={16} className="mr-1" />
-              <span>{getPriceSymbol(itinerary.price)}</span>
+              <DollarSign size={16} className=""/>:
+              <span className="mx-1">{getPriceSymbol(itinerary.price)}</span>
             </div>
           </div>
 
