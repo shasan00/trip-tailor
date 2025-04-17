@@ -24,7 +24,9 @@ export function AIChatbot() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
   }
 
   useEffect(() => {
@@ -85,10 +87,10 @@ export function AIChatbot() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex justify-between items-center p-4 border-b">
+      <div className="flex justify-between items-center p-4 border-b shrink-0 bg-background">
         <h2 className="font-semibold">TripTailor Assistant</h2>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-background">
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
             <div className={`flex max-w-[80%] ${message.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
@@ -110,7 +112,7 @@ export function AIChatbot() {
         ))}
         <div ref={messagesEndRef} />
       </div>
-      <div className="p-4 border-t">
+      <div className="p-4 border-t shrink-0 bg-background">
         <div className="flex w-full items-center space-x-2">
           <Input
             placeholder="Type your message..."
@@ -118,8 +120,9 @@ export function AIChatbot() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
+            className="flex-1"
           />
-          <Button size="icon" disabled={isLoading || !input.trim()} onClick={handleSend}>
+          <Button size="icon" disabled={isLoading || !input.trim()} onClick={handleSend} className="shrink-0">
             {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
@@ -127,4 +130,3 @@ export function AIChatbot() {
     </div>
   )
 }
-
