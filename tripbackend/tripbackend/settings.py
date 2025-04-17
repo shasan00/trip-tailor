@@ -25,7 +25,7 @@ dotenv.load_dotenv(dotenv_path=dotenv_path)
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0h0isa3wmy(9a1-+@f#8o$$x4zwmo7v8u@*qfwfmy18&cc724z'
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -66,8 +66,6 @@ ROOT_URLCONF = 'tripbackend.urls'
 
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://192.168.1.159:3000",
-    "https://128.61.123.247:3000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
