@@ -24,7 +24,7 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
 
 ## Technology Stack
 
-*   **Frontend:** React, Next.js (with Turbopack), TypeScript, Tailwind CSS, Shadcn/UI
+*   **Frontend:** React, Next.js (with Turbopack), TypeScript, Tailwind CSS, Shadcn/UI, @react-google-maps/api
 *   **Backend:** Python, Django, Django REST Framework
 *   **Database:** SQLite (default for development)
 *   **APIs:**
@@ -85,7 +85,12 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
     npm install
     # Or if you use yarn: yarn install
     ```
-3.  **Environment Variables:**
+3.  **Install Google Maps library:**
+    ```bash
+    npm install @react-google-maps/api
+    # Or if you use yarn: yarn add @react-google-maps/api
+    ```
+4.  **Environment Variables:**
     *   Create a `.env.local` file in the `tripfrontend` directory.
     *   Add necessary frontend environment variables:
         ```env
