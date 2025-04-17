@@ -62,7 +62,7 @@ export default function Home() {
       <section className="relative py-20 md:py-32 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <Image
-            src="/placeholder.svg?height=1080&width=1920"
+            src="/the-chaffins-v2Ge7IHgn2o-unsplash.jpg"
             alt="Travel background"
             fill
             className="object-cover opacity-20"
