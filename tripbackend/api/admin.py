@@ -1,6 +1,23 @@
 from django.contrib import admin
+from django import forms
+from django.utils.html import format_html
 # Import all relevant models
 from .models import Itinerary, ItineraryDay, Stop, Review, ItineraryPhoto
+
+
+class ItineraryDayModelChoiceField(forms.ModelChoiceField):
+    def label_from_instance(self, obj):
+        # Display the itinerary's name along with the day number
+        return f"{obj.itinerary.name} - Day {obj.day_number}" if obj.itinerary and obj.day_number else super().label_from_instance(obj)
+
+
+class StopAdminForm(forms.ModelForm):
+    itinerary_day = ItineraryDayModelChoiceField(queryset=ItineraryDay.objects.all())
+
+    class Meta:
+        model = Stop
+        fields = '__all__'
+
 
 # Customize Admin views for better usability
 
@@ -34,7 +51,7 @@ class ItineraryPhotoInline(admin.TabularInline):
 
 class ItineraryAdmin(admin.ModelAdmin):
     """Admin configuration for Itinerary."""
-    list_display = ('name', 'destination', 'user', 'duration', 'price', 'status', 'rating', 'created_at')
+    list_display = ('name', 'destination', 'user', 'image_thumbnail', 'duration', 'price', 'status', 'rating', 'created_at')
     list_filter = ('status', 'destination', 'user') # Add filters
     search_fields = ('name', 'destination', 'description', 'user__username') # Allow searching
     readonly_fields = ('created_at', 'updated_at', 'rating') # Fields not directly editable here
@@ -52,6 +69,13 @@ class ItineraryAdmin(admin.ModelAdmin):
     )
     inlines = [ItineraryDayInline, ItineraryPhotoInline] # Allow editing days and photos inline
 
+    def image_thumbnail(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="max-height:50px;" />', obj.image.url)
+        return ""
+
+    image_thumbnail.short_description = "Image"
+
 class ReviewAdmin(admin.ModelAdmin):
     """Admin configuration for Review."""
     list_display = ('itinerary', 'user', 'rating', 'created_at')
@@ -61,15 +85,24 @@ class ReviewAdmin(admin.ModelAdmin):
 
 class StopAdmin(admin.ModelAdmin):
     """Admin configuration for Stop."""
+    form = StopAdminForm
     list_display = ('name', 'itinerary_day', 'stop_type', 'order')
     list_filter = ('stop_type', 'itinerary_day__itinerary__destination')
     search_fields = ('name', 'description')
+    ordering = ('itinerary_day__itinerary__name', 'itinerary_day__day_number', 'order')
 
 class ItineraryPhotoAdmin(admin.ModelAdmin):
     """Admin configuration for ItineraryPhoto."""
-    list_display = ('itinerary', 'caption', 'uploaded_at')
+    list_display = ('itinerary', 'caption', 'photo_thumbnail', 'uploaded_at')
     search_fields = ('caption', 'itinerary__name')
     readonly_fields = ('uploaded_at',)
+
+    def photo_thumbnail(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="max-height:50px;" />', obj.image.url)
+        return ""
+
+    photo_thumbnail.short_description = "Photo"
 
 # Register models with their custom admin configurations
 admin.site.register(Itinerary, ItineraryAdmin)

@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
+import dynamic from "next/dynamic"
 
 interface Itinerary {
   id: number
@@ -61,6 +62,12 @@ const getPriceSymbol = (price: number): string => {
   if (price <= 1000) return "$$"
   return "$$$"
 }
+
+// Dynamically import the map component to avoid SSR issues
+const ItineraryMap = dynamic(
+  () => import("@/components/map/GoogleMap"),
+  { ssr: false }
+)
 
 export default function ItineraryDetailPage() {
   const params = useParams()
@@ -535,9 +542,13 @@ export default function ItineraryDetailPage() {
             </TabsContent>
 
             <TabsContent value="map">
-              <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
-                <p className="text-muted-foreground">Interactive map would be displayed here using Google Maps API</p>
-              </div>
+              {itinerary.days && itinerary.days.length > 0 ? (
+                <ItineraryMap days={itinerary.days} />
+              ) : (
+                <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
+                  <p className="text-muted-foreground">No stops available to display on the map</p>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="reviews" className="space-y-6">

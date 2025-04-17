@@ -31,7 +31,7 @@ interface Stop {
 type AutocompleteInstance = google.maps.places.Autocomplete;
 
 // Libraries needed for Google Maps API
-const libraries: ('places')[] = ['places'];
+const libraries: ('places' | 'maps')[] = ['places', 'maps'];
 
 // Define types for form validation errors
 interface ValidationErrors {
@@ -77,7 +77,8 @@ export default function CreateItineraryPage() {
   // --- Load Google Maps API Script --- 
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
-    libraries: libraries, 
+    libraries: libraries,
+    id: 'google-map-script'
   })
   // --- End Load Google Maps API Script --- 
 
