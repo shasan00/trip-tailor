@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,10 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
 import { MapPin } from "lucide-react"
+import { useJsApiLoader, Autocomplete } from '@react-google-maps/api'
+
+// Libraries needed for Google Maps API
+const libraries: ('places')[] = ['places'];
 
 interface Itinerary {
   id: number
@@ -23,6 +27,9 @@ interface Itinerary {
   }
 }
 
+// Define types for Google Maps Autocomplete instance
+type AutocompleteInstance = google.maps.places.Autocomplete;
+
 const getPriceSymbol = (price: number): string => {
   if (price <= 500) return "$"
   if (price <= 1000) return "$$"
@@ -36,6 +43,43 @@ export default function SearchPage() {
   const [allItineraries, setAllItineraries] = useState<Itinerary[]>([])
   const [filteredItineraries, setFilteredItineraries] = useState<Itinerary[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Google Maps API state
+  const [searchCoordinates, setSearchCoordinates] = useState<{lat: number, lng: number} | null>(null)
+  const autocompleteRef = useRef<AutocompleteInstance | null>(null);
+
+  // Load Google Maps API
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries: libraries,
+    id: 'google-map-script'
+  })
+
+  // Autocomplete handlers
+  const handleAutocompleteLoad = (autocomplete: AutocompleteInstance) => {
+    autocompleteRef.current = autocomplete;
+  }
+
+  const handlePlaceChanged = () => {
+    if (autocompleteRef.current) {
+      const place = autocompleteRef.current.getPlace();
+      
+      if (place.geometry && place.geometry.location) {
+        // Get coordinates
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        setSearchCoordinates({ lat, lng });
+        
+        // Update destination display text
+        setDestination(place.formatted_address || place.name || '');
+        console.log('Location selected:', place.formatted_address || place.name);
+        console.log('Coordinates:', lat, lng);
+      } else {
+        console.log('No geometry found for selected place');
+        setSearchCoordinates(null);
+      }
+    }
+  }
 
   useEffect(() => {
     fetchItineraries()
@@ -89,7 +133,8 @@ export default function SearchPage() {
     console.log("Current search criteria:", {
       destination,
       duration,
-      price
+      price,
+      coordinates: searchCoordinates
     })
 
     // If no search criteria are provided, show all itineraries
@@ -121,11 +166,21 @@ export default function SearchPage() {
     setFilteredItineraries(filtered)
   }
 
-  if (loading) {
+  if (loadError) {
     return (
       <div className="container py-8">
         <div className="flex justify-center items-center h-64">
-          <p className="text-lg">Loading itineraries...</p>
+          <p className="text-lg">Error loading Google Maps: {loadError.message}</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (loading || !isLoaded) {
+    return (
+      <div className="container py-8">
+        <div className="flex justify-center items-center h-64">
+          <p className="text-lg">Loading...</p>
         </div>
       </div>
     )
@@ -140,12 +195,18 @@ export default function SearchPage() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <Label htmlFor="destination">Destination</Label>
-              <Input
-                id="destination"
-                placeholder="e.g. Paris, Tokyo, New York"
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-              />
+              <Autocomplete
+                onLoad={handleAutocompleteLoad}
+                onPlaceChanged={handlePlaceChanged}
+                options={{ types: ['(cities)'] }}
+                fields={['geometry.location', 'formatted_address', 'name']}
+              >
+                <Input
+                  id="destination"
+                  placeholder="Search for a destination city"
+                  defaultValue={destination}
+                />
+              </Autocomplete>
             </div>
 
             <div className="space-y-4">
@@ -248,10 +309,11 @@ export default function SearchPage() {
                   <div className="flex justify-between items-center mt-auto">
                     <div className="flex items-center">
                       <MapPin size={16} className="text-muted-foreground mr-1" />
-                      <span className="text-sm">{itinerary.destination}</span>
+                      <span className="text-sm text-muted-foreground">{itinerary.destination}</span>
                     </div>
-                    <div className="text-sm text-muted-foreground">
-                      {itinerary.duration} days · {getPriceSymbol(itinerary.price)}
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm">{itinerary.duration} days</span>
+                      <span>{getPriceSymbol(itinerary.price)}</span>
                     </div>
                   </div>
                 </div>
@@ -259,7 +321,7 @@ export default function SearchPage() {
             </Link>
           ))
         ) : (
-          <div className="col-span-3 text-center py-12">
+          <div className="col-span-full flex flex-col items-center justify-center py-12">
             <h3 className="text-xl font-semibold mb-2">No itineraries found</h3>
             <p className="text-muted-foreground mb-4">Try adjusting your search criteria</p>
           </div>
