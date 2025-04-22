@@ -12,7 +12,7 @@ import { MapPin } from "lucide-react"
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api'
 
 // Libraries needed for Google Maps API
-const libraries: ('places')[] = ['places'];
+const libraries: ('places' | 'maps')[] = ['places', 'maps'];
 
 interface Itinerary {
   id: number
