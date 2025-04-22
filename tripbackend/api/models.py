@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import MinValueValidator, MaxValueValidator
+import uuid
+from datetime import datetime, timedelta
 
 # Create your models here.
 class Itinerary(models.Model):
@@ -83,5 +85,24 @@ class Review(models.Model):
     class Meta:
         unique_together = ['user', 'itinerary']  # One review per user per itinerary
         ordering = ['-created_at']
+    
+class PasswordResetToken(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reset_tokens')
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+
+    def save(self, *args, **kwargs):
+        if not self.expires_at:
+            # Token expires after 24 hours
+            self.expires_at = datetime.now() + timedelta(hours=24)
+        super().save(*args, **kwargs)
+
+    def is_valid(self):
+        return not self.is_used and datetime.now() < self.expires_at
+    
+    def __str__(self):
+        return f"Reset token for {self.user.email} ({self.token})"
     
     

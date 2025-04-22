@@ -13,11 +13,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useRouter } from "next/navigation"
 import { LogOut, Settings, User } from "lucide-react"
-import { useAuth } from "@/lib/auth-context"
+import { useSession, signOut } from "next-auth/react"
 
 export function UserNav() {
   const router = useRouter()
-  const { user, isAuthenticated, logout } = useAuth()
+  const { data: session, status } = useSession()
+  const isAuthenticated = status === "authenticated"
+  const user = session?.user
 
   if (!isAuthenticated) {
     return (
@@ -31,7 +33,7 @@ export function UserNav() {
 
   const getInitials = () => {
     if (!user) return "JD"
-    return `${user.first_name[0]}${user.last_name[0]}`
+    return `${user.firstName?.[0] || ""}${user.lastName?.[0] || ""}`
   }
 
   return (
@@ -48,7 +50,7 @@ export function UserNav() {
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">
-              {user?.first_name} {user?.last_name}
+              {user?.firstName} {user?.lastName}
             </p>
             <p className="text-xs leading-none text-muted-foreground">
               {user?.email}
@@ -67,7 +69,7 @@ export function UserNav() {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={logout}>
+        <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/" })}>
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>

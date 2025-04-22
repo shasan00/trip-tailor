@@ -151,6 +151,22 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# Email configuration
+if DEBUG and not os.getenv('EMAIL_HOST_PASSWORD'):
+    # Use console backend for development if no email password set
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+    print("Email backend set to console - emails will be printed to console")
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+    EMAIL_HOST = 'smtp.gmail.com'
+    EMAIL_PORT = 587
+    EMAIL_USE_TLS = True
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+    DEFAULT_FROM_EMAIL = os.getenv('EMAIL_HOST_USER')
+    # Set timeout to prevent hanging
+    EMAIL_TIMEOUT = 30
+
 # Add this at the end of the file
 if DEBUG:
     STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]

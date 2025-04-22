@@ -7,7 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { FloatingChatButton } from "@/components/floating-chat-button"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/lib/auth-context"
+import { Providers } from "./providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -24,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <AuthProvider>
+        <Providers>
           <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
             <div className="flex min-h-screen flex-col">
               <Header />
@@ -34,7 +34,7 @@ export default function RootLayout({
             </div>
           </ThemeProvider>
           <Toaster />
-        </AuthProvider>
+        </Providers>
       </body>
     </html>
   )

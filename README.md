@@ -24,7 +24,7 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
 
 ## Technology Stack
 
-*   **Frontend:** React, Next.js (with Turbopack), TypeScript, Tailwind CSS, Shadcn/UI, @react-google-maps/api
+*   **Frontend:** React, Next.js (with Turbopack), TypeScript, Tailwind CSS, Shadcn/UI, @react-google-maps/api, Auth.js (NextAuth)
 *   **Backend:** Python, Django, Django REST Framework
 *   **Database:** SQLite (default for development)
 *   **APIs:**
@@ -90,10 +90,26 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
     npm install @react-google-maps/api
     # Or if you use yarn: yarn add @react-google-maps/api
     ```
-4.  **Environment Variables:**
-    *   Create a `.env.local` file in the `tripfrontend` directory.
+4.  **Install Auth.js (NextAuth):**
+    ```bash
+    npm install next-auth@latest
+    # Or if you use yarn: yarn add next-auth@latest
+    ```
+5.  **Generate NextAuth Secret:**
+    ```bash
+    npx auth secret
+    # This generates a secret key and places it .env.local
+    ```
+6.  **Environment Variables:**
+    *   In the `.env.local` file in the `tripfrontend` directory:
     *   Add necessary frontend environment variables:
         ```env
+        # NextAuth.js configuration
+        NEXTAUTH_URL=http://localhost:3000
+        NEXTAUTH_SECRET=your-nextauth-secret-key-at-least-32-chars
+        
+        # API configuration
+        NEXT_PUBLIC_API_URL=http://localhost:8000
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY='your_google_maps_api_key'
         # Add other public variables prefixed with NEXT_PUBLIC_
         ```

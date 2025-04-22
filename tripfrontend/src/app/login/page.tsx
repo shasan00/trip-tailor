@@ -8,12 +8,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { useAuth } from "@/lib/auth-context"
+import { signIn } from "next-auth/react"
 
 export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { login } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
@@ -30,31 +29,15 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch("http://localhost:8000/api/login/", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password
-        }),
+      const result = await signIn("credentials", {
+        email: formData.email,
+        password: formData.password,
+        redirect: false
       })
 
-      let data;
-      const contentType = response.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        data = await response.json();
-      } else {
-        throw new Error("Server returned non-JSON response");
+      if (result?.error) {
+        throw new Error(result.error)
       }
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
-      }
-
-      // Use the auth context to login
-      login(data.token, data.user)
 
       toast({
         title: "Success",
@@ -63,6 +46,7 @@ export default function LoginPage() {
 
       // Redirect to home page
       router.push("/")
+      router.refresh()
     } catch (error) {
       toast({
         title: "Error",
@@ -103,6 +87,11 @@ export default function LoginPage() {
                 value={formData.password}
                 onChange={handleChange}
               />
+              <div className="text-right">
+                <Link href="/reset-password" className="text-sm text-primary hover:underline">
+                  Forgot password?
+                </Link>
+              </div>
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-4 py-4">

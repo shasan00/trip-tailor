@@ -4,10 +4,11 @@ import Link from "next/link"
 import { MainNav } from "@/components/main-nav"
 import { Button } from "@/components/ui/button"
 import { UserNav } from "@/components/user-nav"
-import { useAuth } from "@/lib/auth-context"
+import { useSession } from "next-auth/react"
 
 export function Header() {
-  const { isAuthenticated } = useAuth()
+  const { status } = useSession()
+  const isAuthenticated = status === "authenticated"
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
