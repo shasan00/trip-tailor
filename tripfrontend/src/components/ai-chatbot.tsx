@@ -2,12 +2,18 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, use } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { ChatMessage } from "@/lib/types"
+import type { ChatMessage, Itinerary } from "@/lib/types"
 import { Send, Loader2 } from "lucide-react"
+import { getItineraries } from "@/lib/api"
+
+
+import { GoogleGenAI } from "@google/genai"
+
+const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY })
 
 export function AIChatbot() {
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -21,7 +27,21 @@ export function AIChatbot() {
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [itineraries, setItineraries] = useState<Itinerary[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+
+  useEffect(() => {
+    async function fetchItineraries() {
+      try {
+        const data = await getItineraries()
+        setItineraries(data)
+      } catch (err) {
+        console.error("Failed to load itineraries", err)
+      }
+    }
+    fetchItineraries()
+  }, [])
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -49,34 +69,41 @@ export function AIChatbot() {
     setIsLoading(true)
 
     // Simulate AI response
-    setTimeout(() => {
-      let response = ""
+    try {
+      let prompt = "Here are your available itineraries:\n"
+      prompt += itineraries.map(it =>
+        `• ${it.title} (${it.duration} days) in ${it.destination}: ${it.description}`
+      ).join("\n")
+      prompt += `\n\nUser: ${input}`
 
-      if (input.toLowerCase().includes("paris")) {
-        response =
-          "Paris is a wonderful destination! I found several itineraries for Paris ranging from weekend trips to week-long stays. Would you prefer a budget-friendly option or a luxury experience?"
-      } else if (input.toLowerCase().includes("tokyo")) {
-        response =
-          "Tokyo is an amazing city to explore! I have itineraries that cover traditional temples, modern attractions, and the best food spots. How many days are you planning to stay?"
-      } else if (input.toLowerCase().includes("new york")) {
-        response =
-          "New York City has so much to offer! I can recommend itineraries that focus on iconic landmarks, museums, or food experiences. What interests you the most?"
-      } else {
-        response =
-          "Thanks for sharing! I can help you find the perfect itinerary. Could you tell me more about your preferences? For example, how long you plan to stay, your budget, and what types of activities you enjoy?"
-      }
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+      })
 
       const assistantMessage: ChatMessage = {
-        id: Date.now().toString(),
+        id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: response,
+        content: response.text || "",
         createdAt: new Date().toISOString(),
       }
 
       setMessages((prev) => [...prev, assistantMessage])
+    } 
+    catch (error) {
+      console.error("Error fetching from Gemini API:", error)
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, I encountered an error. Please try again later.",
+        createdAt: new Date().toISOString(),
+      }
+
+      setMessages((prev) => [...prev, errorMessage])
+    } finally {
       setIsLoading(false)
-    }, 1000)
-  }
+    }
+  }  
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -130,3 +157,4 @@ export function AIChatbot() {
     </div>
   )
 }
+
