@@ -1,4 +1,6 @@
 import { getSession } from "next-auth/react";
+import type { Itinerary } from "@/lib/types";
+
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -88,3 +90,9 @@ export async function uploadFormData(endpoint: string, formData: FormData, metho
 
   return response;
 } 
+
+
+export async function getItineraries(): Promise<Itinerary[]> {
+  const response = await fetchAPI("/api/itineraries/")
+  return response || []
+}

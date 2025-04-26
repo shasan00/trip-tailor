@@ -2,12 +2,14 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, use } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import type { ChatMessage } from "@/lib/types"
+import type { ChatMessage, Itinerary } from "@/lib/types"
 import { Send, Loader2 } from "lucide-react"
+import { getItineraries } from "@/lib/api"
+
 
 import { GoogleGenAI } from "@google/genai"
 
@@ -25,7 +27,21 @@ export function AIChatbot() {
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [itineraries, setItineraries] = useState<Itinerary[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+
+  useEffect(() => {
+    async function fetchItineraries() {
+      try {
+        const data = await getItineraries()
+        setItineraries(data)
+      } catch (err) {
+        console.error("Failed to load itineraries", err)
+      }
+    }
+    fetchItineraries()
+  }, [])
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -54,9 +70,15 @@ export function AIChatbot() {
 
     // Simulate AI response
     try {
+      let prompt = "Here are your available itineraries:\n"
+      prompt += itineraries.map(it =>
+        `• ${it.title} (${it.duration} days) in ${it.destination}: ${it.description}`
+      ).join("\n")
+      prompt += `\n\nUser: ${input}`
+
       const response = await ai.models.generateContent({
         model: "gemini-2.0-flash",
-        contents: input,
+        contents: prompt,
       })
 
       const assistantMessage: ChatMessage = {
