@@ -30,6 +30,18 @@ def itinerary_list(request):
     return Response(serializer.data)
 
 @api_view(['GET'])
+def itineraries_by_creator(request, creator_id):
+    try:
+        creator = User.objects.get(pk=creator_id)
+        itineraries = Itinerary.objects.filter(user=creator, status='published')
+        serializer = ItinerarySerializer(itineraries, many=True)
+        return Response(serializer.data)
+    except User.DoesNotExist:
+        return Response({"error": "Creator not found"}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
 def public_itinerary_detail(request, pk):
     try:
         itinerary = Itinerary.objects.get(pk=pk, status='published')
@@ -270,8 +282,11 @@ def publish_itinerary(request, pk):
     return Response(serializer.data)
 
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
 def itinerary_reviews(request, pk):
+    """
+    GET: List all reviews for an itinerary (no authentication required)
+    POST: Add a review to an itinerary (authentication required)
+    """
     try:
         itinerary = Itinerary.objects.get(pk=pk)
     except Itinerary.DoesNotExist:
@@ -280,18 +295,31 @@ def itinerary_reviews(request, pk):
             status=status.HTTP_404_NOT_FOUND
         )
 
+    # GET requests can be unauthenticated
     if request.method == 'GET':
         try:
             reviews = Review.objects.filter(itinerary=itinerary)
             serializer = ReviewSerializer(reviews, many=True)
             return Response(serializer.data)
         except Exception as e:
+            logger.exception(f"Error fetching reviews: {e}")
             return Response(
                 {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+    # For POST requests, authenticate the user
     elif request.method == 'POST':
+        # Check if the user is authenticated
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "Authentication required to submit a review"},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+            
+        # Log the full request data for debugging
+        logger.info(f"Review POST data: {request.data}")
+            
         # Check if user has already reviewed this itinerary
         existing_review = Review.objects.filter(user=request.user, itinerary=itinerary).first()
         if existing_review:
@@ -300,15 +328,54 @@ def itinerary_reviews(request, pk):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Add the itinerary to the request data
-        data = request.data.copy()
-        data['itinerary'] = itinerary.id
+        # Validate required fields
+        rating = request.data.get('rating')
+        comment = request.data.get('comment')
+        
+        if not rating:
+            return Response(
+                {"error": "Rating is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if not comment:
+            return Response(
+                {"error": "Comment is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            rating = int(rating)
+            if rating < 1 or rating > 5:
+                return Response(
+                    {"error": "Rating must be between 1 and 5"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "Rating must be a number between 1 and 5"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        serializer = ReviewSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save(user=request.user, itinerary=itinerary)
+        # Create the review directly
+        try:
+            review = Review.objects.create(
+                user=request.user,
+                itinerary=itinerary,
+                rating=rating,
+                comment=comment
+            )
+            
+            # Serialize for response
+            serializer = ReviewSerializer(review)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            logger.exception(f"Error creating review: {e}")
+            return Response(
+                {"error": f"Failed to create review: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 @api_view(['PUT', 'DELETE'])
 @permission_classes([IsAuthenticated])

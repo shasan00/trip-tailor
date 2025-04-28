@@ -141,31 +141,39 @@ export default function ItineraryDetailPage() {
     const fetchReviews = async () => {
       try {
         console.log('Fetching reviews for itinerary:', id)
-        const token = localStorage.getItem('token')
-        if (!token) {
-          console.log('No token found, skipping reviews fetch')
-          return
-        }
-
-        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`, {
-          headers: {
-            'Authorization': `Token ${token}`
-          }
-        })
+        // Don't require token for GET requests
+        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`)
         console.log('Reviews API response status:', response.status)
         
         if (!response.ok) {
           let errorMessage = "Failed to fetch reviews"
-          try {
-            const errorData = await response.json()
-            errorMessage = errorData.error || errorMessage
-            console.error('Reviews API error:', errorData)
-          } catch (e) {
-            // If response is not JSON, use status text
-            errorMessage = response.statusText || errorMessage
-            console.error('Failed to parse error response:', e)
+          
+          // Check content type to handle both JSON and non-JSON responses
+          const contentType = response.headers.get('content-type')
+          
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const errorData = await response.json()
+              // Check if errorData has a meaningful error message
+              if (errorData && typeof errorData === 'object' && errorData.error) {
+                errorMessage = errorData.error
+                console.error('Reviews API error:', errorData.error)
+              } else {
+                console.error('Reviews API returned error status with no details')
+              }
+            } catch (e) {
+              console.error('Failed to parse JSON error response:', e)
+            }
+          } else {
+            // Non-JSON response (likely HTML error page)
+            const responseText = await response.text()
+            console.error('Received non-JSON response:', responseText.substring(0, 150) + '...')
           }
-          throw new Error(errorMessage)
+          
+          // Don't throw an error, just log it and continue with empty reviews
+          console.error(errorMessage)
+          setReviews([])
+          return
         }
 
         const data = await response.json()
@@ -251,10 +259,25 @@ export default function ItineraryDetailPage() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to submit review")
+        const responseText = await response.text() // Read raw text first
+        console.error('[handleSubmitReview] Raw error response text:', responseText)
+        let errorMessage = "Failed to submit review"
+
+        try {
+          // Attempt to parse the response as JSON
+          const errorData = JSON.parse(responseText)
+          console.error('[handleSubmitReview] Parsed error data:', errorData)
+          errorMessage = errorData.detail || errorData.error || JSON.stringify(errorData)
+        } catch (parseError) {
+          // If parsing fails, use the raw text (if short) or a generic message
+          console.error('[handleSubmitReview] Failed to parse response as JSON:', parseError)
+          errorMessage = responseText.length < 100 ? responseText : "Server error (non-JSON response)"
+        }
+        
+        throw new Error(errorMessage)
       }
 
+      // Parse the successful response
       const data = await response.json()
       setReviews([data, ...reviews])
       setHasReviewed(true)
@@ -507,11 +530,14 @@ export default function ItineraryDetailPage() {
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <p className="font-medium">
+                  <Link 
+                    href={`/creator/${itinerary.user?.id}`}
+                    className="font-medium hover:underline"
+                  >
                     {itinerary.user?.first_name && itinerary.user?.last_name 
                       ? `${itinerary.user.first_name} ${itinerary.user.last_name}`
                       : 'Unknown User'}
-                  </p>
+                  </Link>
                 </div>
               </div>
             </TabsContent>
