@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PlusCircle, Trash2, MapPin, AlertCircle } from "lucide-react"
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api'
+import { useSession } from "next-auth/react"
 
 interface Stop {
   id: string
@@ -85,6 +86,8 @@ export default function CreateItineraryPage() {
   // Add validation errors state
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const { data: session, status } = useSession();
 
   const addStop = (day: number) => {
     const newStop: Stop = {
@@ -309,7 +312,7 @@ export default function CreateItineraryPage() {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = session?.user?.token;
     if (!token) {
       console.error('User not logged in.');
       window.location.href = '/login';
