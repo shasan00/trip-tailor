@@ -58,7 +58,7 @@ export default function EditItineraryPage() {
           return
         }
 
-        const response = await fetch(`http://localhost:8000/api/user/itineraries/${id}/`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
           headers: {
             'Authorization': `Token ${token}`
           }
@@ -117,7 +117,7 @@ export default function EditItineraryPage() {
         formData.append('image', image)
       }
 
-      const response = await fetch(`http://localhost:8000/api/user/itineraries/${id}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
         method: 'PUT',
         headers: {
           'Authorization': `Token ${token}`
@@ -227,7 +227,7 @@ export default function EditItineraryPage() {
             <div className="mt-2 flex items-center space-x-4">
               <div className="relative h-32 w-32">
                 <img
-                  src={image ? URL.createObjectURL(image) : `http://localhost:8000${itinerary.image}`}
+                  src={image ? URL.createObjectURL(image) : `${process.env.NEXT_PUBLIC_API_URL}${itinerary.image}`}
                   alt="Cover"
                   className="h-full w-full rounded-lg object-cover"
                 />

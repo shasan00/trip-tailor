@@ -98,7 +98,7 @@ export default function ItineraryDetailPage() {
   useEffect(() => {
     const fetchItinerary = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/`)
         if (!response.ok) {
           throw new Error("Failed to fetch itinerary")
         }
@@ -144,7 +144,7 @@ export default function ItineraryDetailPage() {
       try {
         console.log('Fetching reviews for itinerary:', id)
         // Don't require token for GET requests
-        const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/reviews/`)
         console.log('Reviews API response status:', response.status)
         
         if (!response.ok) {
@@ -247,7 +247,7 @@ export default function ItineraryDetailPage() {
     const token = session.user.token
 
     try {
-      const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/reviews/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +328,7 @@ export default function ItineraryDetailPage() {
     const token = session.user.token
 
     try {
-      const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${reviewId}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Token ${token}`
@@ -369,7 +369,7 @@ export default function ItineraryDetailPage() {
     const token = session.user.token
 
     try {
-      const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/reviews/${reviewId}/`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -418,7 +418,7 @@ export default function ItineraryDetailPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:8000/api/user/itineraries/${id}/`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Token ${token}`

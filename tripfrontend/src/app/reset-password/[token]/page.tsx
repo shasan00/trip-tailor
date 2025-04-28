@@ -35,7 +35,7 @@ export default function ResetPasswordWithTokenPage() {
   useEffect(() => {
     const verifyToken = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/password-reset/validate/${token}/`)
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/password-reset/validate/${token}/`)
         const data = await response.json()
 
         if (data.valid) {
@@ -74,7 +74,7 @@ export default function ResetPasswordWithTokenPage() {
     }
 
     try {
-      const response = await fetch("http://localhost:8000/api/password-reset/confirm/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/password-reset/confirm/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

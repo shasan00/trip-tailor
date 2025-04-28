@@ -2,7 +2,7 @@ import { getSession } from "next-auth/react";
 import type { Itinerary } from "@/lib/types";
 
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "process.env.NEXT_PUBLIC_API_URL";
 
 /**
  * Makes an authenticated API request to the backend

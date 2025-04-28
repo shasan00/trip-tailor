@@ -101,7 +101,7 @@ export default function ProfilePage() {
                 <div className="relative h-48 w-full overflow-hidden">
                   {itinerary.image ? (
                     <img
-                      src={`http://localhost:8000${itinerary.image}`}
+                      src={`${process.env.NEXT_PUBLIC_API_URL}${itinerary.image}`}
                       alt={itinerary.name}
                       className="object-cover w-full h-full transition-transform group-hover:scale-105"
                       onError={(e) => {

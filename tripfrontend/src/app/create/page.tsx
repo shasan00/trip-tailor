@@ -384,7 +384,7 @@ export default function CreateItineraryPage() {
       console.log("Checking formData just before fetch:", formData.get('days'));
 
       // Fetch Call
-      const response = await fetch("http://localhost:8000/api/user/itineraries/", {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/`, {
         method: "POST",
         headers: {
           "Authorization": `Token ${token}`

@@ -32,7 +32,7 @@ export default function Home() {
   useEffect(() => {
     const fetchItineraries = async () => {
       try {
-        const response = await fetch("http://localhost:8000/api/itineraries/")
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/`)
         if (!response.ok) {
           throw new Error("Failed to fetch itineraries")
         }
@@ -184,7 +184,7 @@ export default function Home() {
                   <div className="relative h-48 w-full overflow-hidden">
                     {itinerary.image ? (
                       <img
-                        src={`http://localhost:8000${itinerary.image}`}
+                        src={`${process.env.NEXT_PUBLIC_API_URL}/${itinerary.image}`}
                         alt={itinerary.name}
                         className="object-cover transition-transform group-hover:scale-105"
                     /> ) : (
