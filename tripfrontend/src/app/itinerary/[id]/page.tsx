@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import dynamic from "next/dynamic"
+import { useSession } from "next-auth/react"
 
 interface Itinerary {
   id: number
@@ -73,6 +74,7 @@ export default function ItineraryDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const { data: session, status } = useSession()
   const id = params.id as string
   const [itinerary, setItinerary] = useState<Itinerary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -180,8 +182,7 @@ export default function ItineraryDetailPage() {
         console.log('Reviews data:', data)
         setReviews(data)
         
-        // Check if current user has reviewed
-        const userId = localStorage.getItem('userId')
+        const userId = session?.user?.id
         if (userId) {
           const userReview = data.find((review: Review) => review.user.id.toString() === userId)
           setHasReviewed(!!userReview)
@@ -193,7 +194,7 @@ export default function ItineraryDetailPage() {
     }
 
     fetchReviews()
-  }, [id])
+  }, [id, session?.user?.id])
 
   if (loading) {
     return (
@@ -235,8 +236,7 @@ export default function ItineraryDetailPage() {
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault()
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (status !== "authenticated" || !session?.user?.token) {
       toast({
         title: "Error",
         description: "You must be logged in to submit a review",
@@ -244,6 +244,7 @@ export default function ItineraryDetailPage() {
       })
       return
     }
+    const token = session.user.token
 
     try {
       const response = await fetch(`http://localhost:8000/api/itineraries/${id}/reviews/`, {
@@ -316,8 +317,7 @@ export default function ItineraryDetailPage() {
   }
 
   const handleDeleteReview = async (reviewId: number) => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (status !== "authenticated" || !session?.user?.token) {
       toast({
         title: "Error",
         description: "You must be logged in to delete a review",
@@ -325,6 +325,7 @@ export default function ItineraryDetailPage() {
       })
       return
     }
+    const token = session.user.token
 
     try {
       const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
@@ -357,8 +358,7 @@ export default function ItineraryDetailPage() {
   }
 
   const handleEditReview = async (reviewId: number) => {
-    const token = localStorage.getItem('token')
-    if (!token) {
+    if (status !== "authenticated" || !session?.user?.token) {
       toast({
         title: "Error",
         description: "You must be logged in to edit a review",
@@ -366,6 +366,7 @@ export default function ItineraryDetailPage() {
       })
       return
     }
+    const token = session.user.token
 
     try {
       const response = await fetch(`http://localhost:8000/api/reviews/${reviewId}/`, {
@@ -459,7 +460,7 @@ export default function ItineraryDetailPage() {
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold">{itinerary.name}</h1>
             <div className="flex space-x-2">
-              {itinerary.user?.id.toString() === localStorage.getItem('userId') && (
+              {itinerary.user?.id.toString() === session?.user?.id && (
                 <>
                   <Link href={`/itinerary/${itinerary.id}/edit`}>
                     <Button variant="outline" size="icon" aria-label="Edit itinerary">
@@ -696,7 +697,7 @@ export default function ItineraryDetailPage() {
                                   />
                                 ))}
                               </div>
-                              {review.user.id.toString() === localStorage.getItem('userId') && (
+                              {review.user.id.toString() === session?.user?.id && (
                                 <div className="flex space-x-1">
                                   <Button
                                     variant="ghost"

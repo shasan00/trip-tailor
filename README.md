@@ -95,12 +95,17 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
     npm install next-auth@latest
     # Or if you use yarn: yarn add next-auth@latest
     ```
-5.  **Generate NextAuth Secret:**
+5.  **Install Google Generative AI package:**
+    ```bash
+    npm install @google/generative-ai
+    # Or if you use yarn: yarn add @google/generative-ai
+    ```
+6.  **Generate NextAuth Secret:**
     ```bash
     npx auth secret
     # This generates a secret key and places it .env.local
     ```
-6.  **Environment Variables:**
+7.  **Environment Variables:**
     *   In the `.env.local` file in the `tripfrontend` directory:
     *   Add necessary frontend environment variables:
         ```env
@@ -111,6 +116,7 @@ Finally, users will be able to rate and leave reviews on itineraries. This will 
         # API configuration
         NEXT_PUBLIC_API_URL=http://localhost:8000
         NEXT_PUBLIC_GOOGLE_MAPS_API_KEY='your_google_maps_api_key'
+        NEXT_PUBLIC_GEMINI_API_KEY='your_gemini_api_key'
         # Add other public variables prefixed with NEXT_PUBLIC_
         ```
     *   Ensure your Google Maps API key has the necessary APIs enabled (Places API, Geocoding API, Maps JavaScript API).

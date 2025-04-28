@@ -72,7 +72,7 @@ export function AIChatbot() {
     try {
       let prompt = "Here are your available itineraries:\n"
       prompt += itineraries.map(it =>
-        `• ${it.name} (${it.duration} days) in ${it.destination}: ${it.description}`
+        `• ${it.title} (${it.duration} days) in ${it.destination}: ${it.description}`
       ).join("\n")
       prompt += `\n\nUser: ${input}`
 
