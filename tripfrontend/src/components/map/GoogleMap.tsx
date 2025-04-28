@@ -49,7 +49,8 @@ const stopTypeColors: Record<string, string> = {
 export default function ItineraryMap({ days, center, zoom }: ItineraryMapProps) {
   const { isLoaded } = useJsApiLoader({
     id: 'google-map-script',
-    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || ''
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+    libraries: ['places', 'maps'],
   });
 
   const [map, setMap] = useState<google.maps.Map | null>(null);
