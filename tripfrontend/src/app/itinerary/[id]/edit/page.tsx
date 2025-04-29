@@ -138,7 +138,7 @@ export default function EditItineraryPage() {
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
           headers: {
-			'Authorization': `Token ${token}`
+            'Authorization': `Token ${token}`
           }
         })
         if (!response.ok) {
@@ -147,9 +147,29 @@ export default function EditItineraryPage() {
         const data = await response.json()
 
         // Check if the current user is the creator
-			if (data.user?.id?.toString() !== session?.user?.id?.toString()) { // Ensure IDs are compared correctly
+        if (data.user?.id?.toString() !== session?.user?.id?.toString()) {
           router.push(`/itinerary/${id}`) // Redirect if not owner
           return
+        }
+
+        // Transform the data to ensure consistency between "stops" and "activities"
+        if (data.days) {
+          data.days.forEach((day: any) => {
+            // If the backend returned "stops" instead of "activities", map it
+            if (day.stops && !day.activities) {
+              day.activities = day.stops.map((stop: any) => ({
+                id: stop.id,
+                name: stop.name,
+                description: stop.description,
+                type: stop.stop_type || "activity",
+                location: stop.location || "",
+                latitude: stop.latitude ? parseFloat(stop.latitude) : undefined,
+                longitude: stop.longitude ? parseFloat(stop.longitude) : undefined
+              }));
+            } else if (!day.activities) {
+              day.activities = [];
+            }
+          });
         }
 
         setItinerary(data)
@@ -162,14 +182,14 @@ export default function EditItineraryPage() {
         console.error("Error fetching itinerary:", err)
         setError(err instanceof Error ? err.message : "An error occurred")
       } finally {
-			setLoading(false)
+        setLoading(false)
       }
     }
 
     if (status === "authenticated") {
-        fetchItinerary();
-	} else if (status === "unauthenticated") {
-        router.push('/login'); // Redirect if not logged in
+      fetchItinerary();
+    } else if (status === "unauthenticated") {
+      router.push('/login'); // Redirect if not logged in
     }
   }, [id, router, session, status])
 
@@ -630,7 +650,43 @@ export default function EditItineraryPage() {
                     value={itinerary.duration}
                     onChange={(e) => {
                       const value = parseInt(e.target.value);
-                      setItinerary({ ...itinerary, duration: isNaN(value) ? 0 : value });
+                      const newDuration = isNaN(value) ? 1 : Math.max(1, value);
+                      
+                      // Update itinerary with new duration and adjust days array
+                      setItinerary(prev => {
+                        if (!prev) return null;
+                        
+                        const updatedDays = [...prev.days];
+                        const currentDaysCount = updatedDays.length;
+                        
+                        // Adding days
+                        if (newDuration > currentDaysCount) {
+                          for (let i = currentDaysCount + 1; i <= newDuration; i++) {
+                            updatedDays.push({
+                              day_number: i,
+                              title: `Day ${i}`,
+                              description: "",
+                              activities: []
+                            });
+                          }
+                        } 
+                        // Removing days (only remove from the end)
+                        else if (newDuration < currentDaysCount) {
+                          updatedDays.splice(newDuration);
+                          
+                          // Adjust activeDay if it's now out of bounds
+                          if (activeDay >= newDuration) {
+                            setActiveDay(newDuration - 1);
+                          }
+                        }
+                        
+                        return {
+                          ...prev,
+                          duration: newDuration,
+                          days: updatedDays
+                        };
+                      });
+                      
                       setTouched(prev => ({...prev, duration: true}));
                     }}
                     required
