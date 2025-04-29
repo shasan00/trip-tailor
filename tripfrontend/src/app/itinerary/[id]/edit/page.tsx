@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MapPin, Calendar, DollarSign, ImageIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { useSession } from "next-auth/react"
 
 interface Itinerary {
   id: number
@@ -48,11 +49,13 @@ export default function EditItineraryPage() {
   const [saving, setSaving] = useState(false)
   const [image, setImage] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const { data: session, status } = useSession();
 
   useEffect(() => {
     const fetchItinerary = async () => {
       try {
-        const token = localStorage.getItem('token')
+        const token = session?.user?.token;
+
         if (!token) {
           router.push('/login')
           return
@@ -69,7 +72,7 @@ export default function EditItineraryPage() {
         const data = await response.json()
         
         // Check if the current user is the creator
-        if (data.user?.id.toString() !== localStorage.getItem('userId')) {
+        if (data.user?.id?.toString() !== session?.user?.id) {
           router.push(`/itinerary/${id}`)
           return
         }
@@ -83,8 +86,10 @@ export default function EditItineraryPage() {
       }
     }
 
-    fetchItinerary()
-  }, [id, router])
+    if (status == "authenticated") {
+        fetchItinerary();
+    }
+  }, [id, router, session, status])
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -98,7 +103,7 @@ export default function EditItineraryPage() {
 
     setSaving(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = session?.user?.token
       if (!token) {
         throw new Error("You must be logged in to edit an itinerary")
       }
