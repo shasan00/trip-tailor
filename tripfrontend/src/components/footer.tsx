@@ -9,6 +9,7 @@ export function Footer() {
             <h3 className="text-lg font-semibold">TripTailor</h3>
             <p className="text-sm text-muted-foreground">
               Making trip planning simple and fun by crowdsourcing curated travel itineraries.
+              Sample images from <a href="https://unsplash.com" target="_blank" rel="noopener noreferrer">unsplash.com</a>
             </p>
           </div>
           <div>
