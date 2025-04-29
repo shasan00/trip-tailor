@@ -317,7 +317,10 @@ export default function EditItineraryPage() {
     setErrors(prev => {
       const updatedErrors = { ...prev };
       if (updatedErrors.stops && updatedErrors.stops[`${dayIndex}-${stopIndex}`]) {
-        delete updatedErrors.stops[`${dayIndex}-${stopIndex}`][field as keyof ValidationErrors['stops'][string]];
+        const stopErrors = updatedErrors.stops[`${dayIndex}-${stopIndex}`];
+        if (field in stopErrors) {
+          delete (stopErrors as any)[field];
+        }
       }
       return updatedErrors;
     });
@@ -344,7 +347,10 @@ export default function EditItineraryPage() {
     setErrors(prev => {
       const updatedErrors = { ...prev };
       if (updatedErrors.days && updatedErrors.days[dayIndex]) {
-        delete updatedErrors.days[dayIndex][field as keyof ValidationErrors['days'][string]];
+        const dayErrors = updatedErrors.days[dayIndex];
+        if (field in dayErrors) {
+          delete (dayErrors as any)[field];
+        }
       }
       return updatedErrors;
     });

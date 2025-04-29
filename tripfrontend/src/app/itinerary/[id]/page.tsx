@@ -402,7 +402,7 @@ export default function ItineraryDetailPage() {
   }
 
   const handleDeleteItinerary = async () => {
-    const token = session.user.token
+    const token = session?.user?.token
     if (!token) {
       toast({
         title: "Error",
