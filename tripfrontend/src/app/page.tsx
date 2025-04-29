@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { useSession } from "next-auth/react"
 
 interface Itinerary {
   id: number
@@ -28,6 +29,7 @@ export default function Home() {
   const [featuredItineraries, setFeaturedItineraries] = useState<Itinerary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { data: session, status } = useSession()
 
   useEffect(() => {
     const fetchItineraries = async () => {
@@ -78,13 +80,15 @@ export default function Home() {
             and stress-free.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 mt-8">
-            <Link href="/register">
-              <Button size="lg" className="px-8">
-                Get Started
-              </Button>
-            </Link>
+            {!session && (
+              <Link href="/register">
+                <Button size="lg" className="px-8">
+                  Get Started
+                </Button>
+              </Link>
+            )}
             <Link href="/search">
-              <Button size="lg" variant="outline" className="px-8">
+              <Button size="lg" variant={session ? "default" : "outline"} className="px-8">
                 Explore Itineraries
               </Button>
             </Link>
@@ -234,11 +238,13 @@ export default function Home() {
             <p className="text-xl mb-8 max-w-2xl mx-auto">
               Join thousands of travelers who have discovered the perfect itineraries for their dream destinations.
             </p>
-            <Link href="/register">
-              <Button size="lg" variant="secondary" className="px-8">
-                Sign Up Now
-              </Button>
-            </Link>
+            {!session && (
+              <Link href="/register">
+                <Button size="lg" variant="secondary" className="px-8">
+                  Sign Up Now
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
       </section>
