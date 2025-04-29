@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
  import { MapPin, Calendar, DollarSign, ImageIcon } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useSession } from "next-auth/react"
-// Import Autocomplete and useJsApiLoader
 import { useJsApiLoader, Autocomplete } from '@react-google-maps/api'
 
 interface Itinerary {
@@ -27,7 +26,6 @@ interface Itinerary {
     string
     first_name: string
     last_name: string
-    // Assuming user ID is needed for comparison [cite: 15]
     id?: number | string;
   }
   days: Array<{
@@ -39,29 +37,28 @@ interface Itinerary {
       description: string
       type: string
       location: string
-      // Add coordinates if needed for stops
+
       latitude?: number;
       longitude?: number;
     }>
   }>
-  // Add coordinates for the main destination
   latitude?: number | null;
   longitude?: number | null;
 }
 
-// Define types for Google Maps Autocomplete instance
+
 type AutocompleteInstance = google.maps.places.Autocomplete;
 
-// Libraries needed for Google Maps API
+
 const libraries: ('places' | 'maps')[] = ['places', 'maps'];
 
-// Define types for form validation errors (Keep if needed)
+
 interface ValidationErrors {
   title?: string;
   destination?: string;
   description?: string;
   image?: string;
-  itineraryCoordinates?: string; // Keep if you validate coordinates
+  itineraryCoordinates?: string; 
   stops?: {
     [stopId: string]: {
       name?: string;
@@ -85,13 +82,7 @@ export default function EditItineraryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { data: session, status } = useSession();
 
-  // --- Google Maps State and Refs ---
-  // Refs to store Autocomplete instances
   const autocompleteRef = useRef<AutocompleteInstance | null>(null);
-  // No need for separate lat/lng state if storing directly in itinerary object
-  // const [itineraryLatitude, setItineraryLatitude] = useState<number | null>(null) // [cite: 10]
-  // const [itineraryLongitude, setItineraryLongitude] = useState<number | null>(null) // [cite: 11]
-  // const stopAutocompleteRefs = useRef<Record<string, AutocompleteInstance | null>>({}); // Keep if you add autocomplete for stops [cite: 12]
 
   // --- Load Google Maps API Script ---
   const { isLoaded, loadError } = useJsApiLoader({
