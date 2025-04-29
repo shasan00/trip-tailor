@@ -188,7 +188,9 @@ export default function Home() {
                   <div className="relative h-48 w-full overflow-hidden">
                     {itinerary.image ? (
                       <img
-                        src={`${process.env.NEXT_PUBLIC_API_URL}/${itinerary.image}`}
+                        src={itinerary.image.startsWith('http') 
+                          ? itinerary.image 
+                          : `${process.env.NEXT_PUBLIC_API_URL}${itinerary.image}`}
                         alt={itinerary.name}
                         className="object-cover transition-transform group-hover:scale-105"
                     /> ) : (
@@ -200,24 +202,7 @@ export default function Home() {
                   <div className="p-4">
                     <h3 className="text-lg font-semibold mb-2">{itinerary.name}</h3>
                     <p className="text-sm text-muted-foreground mb-2">{itinerary.description}</p>
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-yellow-500 mr-1"
-                        >
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                        </svg>
-                        <span className="text-sm">{Number(itinerary.rating).toFixed(1)}</span>
-                      </div>
+                    <div className="flex justify-end items-center">
                       <div className="text-sm text-muted-foreground">
                         {itinerary.duration} days · {getPriceSymbol(itinerary.price)}
                       </div>
