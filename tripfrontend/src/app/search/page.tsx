@@ -61,25 +61,20 @@ export default function SearchPage() {
   }
 
   const handlePlaceChanged = () => {
-    if (autocompleteRef.current) {
-      const place = autocompleteRef.current.getPlace();
-      
-      if (place.geometry && place.geometry.location) {
-        // Get coordinates
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        setSearchCoordinates({ lat, lng });
-        
-        // Update destination display text
-        setDestination(place.formatted_address || place.name || '');
-        console.log('Location selected:', place.formatted_address || place.name);
-        console.log('Coordinates:', lat, lng);
-      } else {
-        console.log('No geometry found for selected place');
-        setSearchCoordinates(null);
-      }
+    const place = autocompleteRef.current?.getPlace()
+
+    if (!place || !place.geometry || !place.geometry.location) {
+      console.log('No valid place selected from autocomplete')
+      return
     }
-  }
+
+    const lat = place.geometry.location.lat()
+    const lng = place.geometry.location.lng()
+    setSearchCoordinates({ lat, lng })
+    setDestination(place.formatted_address || place.name || '')
+    console.log('Location selected:', place.formatted_address || place.name)
+    console.log('Coordinates:', lat, lng)
+    }
 
   useEffect(() => {
     fetchItineraries()
@@ -192,6 +187,12 @@ export default function SearchPage() {
 
       <Card className="mb-8">
         <CardContent className="p-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            handleSearch()
+          }}
+        >
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="space-y-2">
               <Label htmlFor="destination">Destination</Label>
@@ -204,7 +205,8 @@ export default function SearchPage() {
                 <Input
                   id="destination"
                   placeholder="Search for a destination city"
-                  defaultValue={destination}
+                  value={destination}
+                  onChange={(e) => setDestination(e.target.value)}
                 />
               </Autocomplete>
             </div>
@@ -270,6 +272,7 @@ export default function SearchPage() {
               </Button>
             </div>
           </div>
+          </form>
         </CardContent>
       </Card>
 
