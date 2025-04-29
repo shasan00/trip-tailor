@@ -39,6 +39,7 @@ interface Itinerary {
       name: string
       description: string
       stop_type: string
+      location_name?: string
       latitude: string
       longitude: string
       order: number
@@ -564,6 +565,12 @@ export default function ItineraryDetailPage() {
                             </span>
                           </div>
                           <p className="text-sm text-muted-foreground mt-2">{stop.description}</p>
+                          {stop.location_name && (
+                            <div className="flex items-center text-sm text-muted-foreground mt-1">
+                              <MapPin size={14} className="mr-1" />
+                              {stop.location_name}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

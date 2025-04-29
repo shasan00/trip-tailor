@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MapPin, Calendar, DollarSign, ImageIcon, PlusCircle, Trash2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useSession } from "next-auth/react"
@@ -40,6 +40,7 @@ interface Itinerary {
       description: string
       type: string
       location: string
+      location_name?: string
       latitude?: number;
       longitude?: number;
     }>
@@ -215,23 +216,28 @@ export default function EditItineraryPage() {
     }
   }, [itinerary?.id, geocoder, isLoaded]); // Only run when itinerary ID changes or geocoder becomes available
 
-  // Function to reverse geocode coordinates to address
+  // Update the reverseGeocode function to return a Promise<string>
   const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
-    if (!geocoder) return `${lat}, ${lng}`;
+    if (!geocoder) {
+      console.warn("Geocoder not available yet");
+      return `${lat}, ${lng}`; // Return the coordinates as a fallback
+    }
     
     try {
       const response = await geocoder.geocode({
         location: { lat, lng }
       });
       
-      if (response.results && response.results.length > 0) {
+      if (response.results?.[0]?.formatted_address) {
         return response.results[0].formatted_address;
+      } else {
+        console.warn("No address found for coordinates", lat, lng);
+        return `${lat}, ${lng}`; // Return coordinates if no address found
       }
     } catch (error) {
-      console.error("Error reverse geocoding:", error);
+      console.error("Geocoding error:", error);
+      return `${lat}, ${lng}`; // Return coordinates on error
     }
-    
-    return `${lat}, ${lng}`;
   };
 
   useEffect(() => {
@@ -246,7 +252,7 @@ export default function EditItineraryPage() {
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
           headers: {
-            'Authorization': `Token ${token}`
+			'Authorization': `Token ${token}`
           }
         })
         if (!response.ok) {
@@ -352,14 +358,14 @@ export default function EditItineraryPage() {
         console.error("Error fetching itinerary:", err)
         setError(err instanceof Error ? err.message : "An error occurred")
       } finally {
-        setLoading(false)
+			setLoading(false)
       }
     }
 
     if (status === "authenticated") {
-      fetchItinerary();
-    } else if (status === "unauthenticated") {
-      router.push('/login'); // Redirect if not logged in
+        fetchItinerary();
+	} else if (status === "unauthenticated") {
+        router.push('/login'); // Redirect if not logged in
     }
   }, [id, router, session, status])
 
@@ -422,7 +428,8 @@ export default function EditItineraryPage() {
           if (updatedDays[dayIndex] && updatedDays[dayIndex].activities[stopIndex]) {
             updatedDays[dayIndex].activities[stopIndex] = {
               ...updatedDays[dayIndex].activities[stopIndex],
-              location: place.formatted_address || updatedDays[dayIndex].activities[stopIndex].location,
+              location_name: place.formatted_address || updatedDays[dayIndex].activities[stopIndex].location_name,
+              location: place.formatted_address || updatedDays[dayIndex].activities[stopIndex].location, // Keep for compatibility with UI
               latitude: roundedLat,
               longitude: roundedLng
             };
@@ -460,8 +467,9 @@ export default function EditItineraryPage() {
       updatedDays[dayIndex].activities.push({
         name: "",
         description: "",
-        type: "activity", // Default type
-        location: "",
+        type: "activity" as const, // Default type with const assertion
+        location_name: "", // Required by backend
+        location: "", // Keep for UI compatibility
       });
       
       return {
@@ -492,10 +500,30 @@ export default function EditItineraryPage() {
       if (!prev) return null;
       
       const updatedDays = [...prev.days];
-      updatedDays[dayIndex].activities[stopIndex] = {
-        ...updatedDays[dayIndex].activities[stopIndex],
-        [field]: value
-      };
+      
+      // Special handling for location field to sync location and location_name
+      if (field === 'location') {
+        updatedDays[dayIndex].activities[stopIndex] = {
+          ...updatedDays[dayIndex].activities[stopIndex],
+          location: value,
+          location_name: value // Keep location_name in sync
+        };
+      } 
+      // Special handling for location_name field to sync location
+      else if (field === 'location_name') {
+        updatedDays[dayIndex].activities[stopIndex] = {
+          ...updatedDays[dayIndex].activities[stopIndex],
+          location_name: value,
+          location: value // Keep location in sync for UI
+        };
+      }
+      // Default handling for other fields
+      else {
+        updatedDays[dayIndex].activities[stopIndex] = {
+          ...updatedDays[dayIndex].activities[stopIndex],
+          [field]: value
+        };
+      }
       
       return {
         ...prev,
@@ -510,6 +538,13 @@ export default function EditItineraryPage() {
         const stopErrors = updatedErrors.stops[`${dayIndex}-${stopIndex}`];
         if (field in stopErrors) {
           delete (stopErrors as any)[field];
+        }
+        // Also clear location error if location_name is set and vice versa
+        if (field === 'location' && 'location' in stopErrors) {
+          delete (stopErrors as any)['location'];
+        }
+        if (field === 'location_name' && 'location' in stopErrors) {
+          delete (stopErrors as any)['location'];
         }
       }
       return updatedErrors;
@@ -544,7 +579,7 @@ export default function EditItineraryPage() {
       }
       return updatedErrors;
     });
-  };
+};
 
   // --- End Google Maps Autocomplete Handlers ---
 
@@ -607,7 +642,8 @@ export default function EditItineraryPage() {
           formIsValid = false;
         }
         
-        if (!stop.location.trim()) {
+        // Check location_name instead of location
+        if (!stop.location_name?.trim() && !stop.location?.trim()) {
           if (!currentErrors.stops) currentErrors.stops = {};
           if (!currentErrors.stops[key]) currentErrors.stops[key] = {};
           currentErrors.stops[key].location = "Stop location is required.";
@@ -692,20 +728,47 @@ export default function EditItineraryPage() {
             name: string;
             description: string;
             type: string;
-            location: string;
+            location?: string;
+            location_name?: string;
             latitude?: number;
             longitude?: number;
-          }) => ({
-            name: activity.name,
-            description: activity.description,
-            stop_type: activity.type,
-            location: activity.location,
-            latitude: activity.latitude?.toString(),
-            longitude: activity.longitude?.toString(),
-            // Include ID if it exists (for existing stops)
-            ...(activity.id ? { id: activity.id } : {})
-          }));
+          }, index: number) => {
+            // Parse coordinates from location if needed
+            let lat = activity.latitude;
+            let lng = activity.longitude;
+            
+            // Use location_name if available, fallback to location for backwards compatibility
+            const locationValue = activity.location_name || activity.location || '';
+            
+            if (!lat || !lng) {
+              // Try to extract coordinates from location string if it looks like coordinates
+              const coordinateMatch = locationValue.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+              if (coordinateMatch) {
+                lat = parseFloat(coordinateMatch[1]);
+                lng = parseFloat(coordinateMatch[2]);
+              }
+            }
+            
+            // Create a cleaned object with location_name, not location
+            return {
+              name: activity.name,
+              description: activity.description,
+              stop_type: activity.type,
+              location_name: locationValue, // Only send location_name to backend
+              latitude: lat?.toString() || undefined,
+              longitude: lng?.toString() || undefined,
+              order: index + 1, // Add order field required by backend
+              // Include ID if it exists (for existing stops)
+              ...(activity.id ? { id: activity.id } : {})
+            };
+          });
+          
+          // Remove activities field to avoid confusion
+          delete processedDay.activities;
         }
+        
+        // Make sure day_number is an integer
+        processedDay.day_number = parseInt(processedDay.day_number.toString());
         
         return processedDay;
       });
@@ -715,7 +778,7 @@ export default function EditItineraryPage() {
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
         method: 'PUT',
-        headers: {
+		headers: {
           'Authorization': `Token ${token}`
           // 'Content-Type': 'multipart/form-data' is set automatically by browser for FormData
         },
@@ -733,14 +796,16 @@ export default function EditItineraryPage() {
         console.log("API response data:", responseData);
       } catch (e) {
         console.log("Could not parse response as JSON:", responseText);
+        responseData = { detail: responseText };
       }
 
       if (!response.ok) {
         if (responseData && typeof responseData === 'object') {
           setErrors(responseData);
+          console.error("Detailed error from server:", JSON.stringify(responseData, null, 2));
         }
         throw new Error(responseData?.detail || "Failed to update itinerary");
-      }
+		}
 
       toast({
         title: "Success",
@@ -811,72 +876,72 @@ export default function EditItineraryPage() {
           
           <TabsContent value="basic" className="space-y-4 mt-4">
             {/* Existing basic info form fields */}
-            <div className="space-y-4">
-              {/* Name Input */}
-              <div>
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={itinerary.name}
-                  onChange={(e) => {
-                    setItinerary({ ...itinerary, name: e.target.value });
-                    setErrors(prev => ({...prev, title: undefined})); // Clear error on change
-                    setTouched(prev => ({...prev, name: true}));
-                  }}
-                  required
-                  aria-invalid={!!errors.title}
-                  aria-describedby={errors.title ? "name-error" : undefined}
-                />
-                {errors.title && <p id="name-error" className="text-sm text-red-600 mt-1">{errors.title}</p>}
-              </div>
+        <div className="space-y-4">
+          {/* Name Input */}
+          <div>
+            <Label htmlFor="name">Name</Label>
+            <Input
+              id="name"
+              value={itinerary.name}
+              onChange={(e) => {
+                setItinerary({ ...itinerary, name: e.target.value });
+                setErrors(prev => ({...prev, title: undefined})); // Clear error on change
+                setTouched(prev => ({...prev, name: true}));
+              }}
+              required
+              aria-invalid={!!errors.title}
+              aria-describedby={errors.title ? "name-error" : undefined}
+            />
+             {errors.title && <p id="name-error" className="text-sm text-red-600 mt-1">{errors.title}</p>}
+          </div>
 
-              {/* Description Textarea */}
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={itinerary.description}
-                  onChange={(e) => {
-                    setItinerary({ ...itinerary, description: e.target.value });
-                    setErrors(prev => ({...prev, description: undefined})); // Clear error on change
-                    setTouched(prev => ({...prev, description: true}));
-                  }}
-                  required
-                  aria-invalid={!!errors.description}
-                  aria-describedby={errors.description ? "description-error" : undefined}
-                />
-                {errors.description && <p id="description-error" className="text-sm text-red-600 mt-1">{errors.description}</p>}
-              </div>
+          {/* Description Textarea */}
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={itinerary.description}
+              onChange={(e) => {
+                setItinerary({ ...itinerary, description: e.target.value });
+                setErrors(prev => ({...prev, description: undefined})); // Clear error on change
+                setTouched(prev => ({...prev, description: true}));
+              }}
+              required
+              aria-invalid={!!errors.description}
+              aria-describedby={errors.description ? "description-error" : undefined}
+            />
+            {errors.description && <p id="description-error" className="text-sm text-red-600 mt-1">{errors.description}</p>}
+          </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Destination Autocomplete Input */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Destination Autocomplete Input */}
                 <div className="md:col-span-1">
-                  <Label htmlFor="destination">Destination</Label>
-                  <Autocomplete
-                    onLoad={handleDestinationLoad}
-                    onPlaceChanged={handleDestinationSelect}
-                  >
-                    <Input
-                      id="destination"
+              <Label htmlFor="destination">Destination</Label>
+               <Autocomplete
+                 onLoad={handleDestinationLoad}
+                 onPlaceChanged={handleDestinationSelect}
+               >
+                 <Input
+                    id="destination"
                       value={itinerary.destination}
-                      onChange={(e) => {
+                    onChange={(e) => {
                         setItinerary({ ...itinerary, destination: e.target.value });
                         setErrors(prev => ({...prev, destination: undefined, itineraryCoordinates: undefined}));
                         setTouched(prev => ({...prev, destination: true}));
-                      }}
-                      placeholder="Enter destination"
-                      required
-                      aria-invalid={!!errors.destination || !!errors.itineraryCoordinates}
-                      aria-describedby={errors.destination ? "destination-error" : errors.itineraryCoordinates ? "coordinates-error" : undefined}
-                    />
-                  </Autocomplete>
-                  {errors.destination && <p id="destination-error" className="text-sm text-red-600 mt-1">{errors.destination}</p>}
-                  {errors.itineraryCoordinates && <p id="coordinates-error" className="text-sm text-red-600 mt-1">{errors.itineraryCoordinates}</p>}
-                </div>
+                     }}
+                    placeholder="Enter destination"
+                    required
+                    aria-invalid={!!errors.destination || !!errors.itineraryCoordinates}
+                    aria-describedby={errors.destination ? "destination-error" : errors.itineraryCoordinates ? "coordinates-error" : undefined}
+                 />
+              </Autocomplete>
+              {errors.destination && <p id="destination-error" className="text-sm text-red-600 mt-1">{errors.destination}</p>}
+              {errors.itineraryCoordinates && <p id="coordinates-error" className="text-sm text-red-600 mt-1">{errors.itineraryCoordinates}</p>}
+            </div>
 
-                {/* Duration Input */}
-                <div>
-                  <Label htmlFor="duration">Duration (days)</Label>
+            {/* Duration Input */}
+            <div>
+              <Label htmlFor="duration">Duration (days)</Label>
                   <div className="flex items-center">
                     <Button
                       type="button"
@@ -911,14 +976,14 @@ export default function EditItineraryPage() {
                         <path d="M5 12h14"/>
                       </svg>
                     </Button>
-                    <Input
-                      id="duration"
+              <Input
+				id="duration"
                       type="text"
                       inputMode="numeric"
                       pattern="[0-9]*"
                       className="rounded-none text-center"
-                      value={itinerary.duration}
-                      onChange={(e) => {
+                value={itinerary.duration}
+                onChange={(e) => {
                         // Parse the input and ensure it's a valid number
                         const value = e.target.value === '' ? 1 : parseInt(e.target.value);
                         const newDuration = isNaN(value) ? 1 : Math.max(1, value);
@@ -1009,9 +1074,9 @@ export default function EditItineraryPage() {
                           };
                         });
                         
-                        setTouched(prev => ({...prev, duration: true}));
-                      }}
-                      required
+                  setTouched(prev => ({...prev, duration: true}));
+                }}
+                required
                     />
                     <Button
                       type="button"
@@ -1116,10 +1181,10 @@ export default function EditItineraryPage() {
                       </svg>
                     </Button>
                   </div>
-                </div>
+            </div>
 
                 {/* Price Range Selection */}
-                <div>
+            <div>
                   <Label>Price Range</Label>
                   <div className="flex flex-wrap gap-2 mt-2">
                     <Button
@@ -1165,12 +1230,12 @@ export default function EditItineraryPage() {
                       $$$
                     </Button>
                   </div>
-                </div>
-              </div>
+            </div>
+          </div>
 
-              {/* Image Upload */}
-              <div>
-                <Label>Cover Image</Label>
+          {/* Image Upload */}
+			<div>
+            <Label>Cover Image</Label>
                 <div className="flex flex-col items-center space-y-4 mt-2">
                   <div className="relative h-48 w-64">
                     <img
@@ -1181,33 +1246,33 @@ export default function EditItineraryPage() {
                               ? itinerary.image 
                               : `${process.env.NEXT_PUBLIC_API_URL}${itinerary.image}`) 
                            : '/placeholder.png')}
-                      alt="Cover"
-                      className="h-full w-full rounded-lg object-cover"
+                    alt="Cover"
+                    className="h-full w-full rounded-lg object-cover"
                       onError={(e) => { e.currentTarget.src = '/placeholder.png'; }}
-                    />
-                  </div>
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleImageChange}
+                 />
+              </div>
+              <div>
+			  <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
                       accept="image/*"
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Change cover image"
-                    >
-                      <ImageIcon className="mr-2 h-4 w-4" />
-                      {image ? "Change Image" : (itinerary.image ? "Change Image" : "Upload Image")}
-                    </Button>
-                  </div>
-                </div>
-                {errors.image && <p className="text-sm text-red-600 mt-1">{errors.image}</p>}
+                  className="hidden"
+				/>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label="Change cover image"
+                >
+					<ImageIcon className="mr-2 h-4 w-4" />
+                  {image ? "Change Image" : (itinerary.image ? "Change Image" : "Upload Image")}
+                </Button>
               </div>
             </div>
+             {errors.image && <p className="text-sm text-red-600 mt-1">{errors.image}</p>}
+          </div>
+        </div>
           </TabsContent>
           
           <TabsContent value="days" className="mt-4">
