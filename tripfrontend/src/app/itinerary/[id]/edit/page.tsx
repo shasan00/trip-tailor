@@ -126,6 +126,114 @@ export default function EditItineraryPage() {
   // In the component, add a state to track the price range
   const [priceRange, setPriceRange] = useState<string>("");
 
+  // Add geocoder reference
+  const [geocoder, setGeocoder] = useState<google.maps.Geocoder | null>(null);
+
+  // Add a state to store original days data
+  const [originalDays, setOriginalDays] = useState<any[]>([]);
+
+  // Set up geocoder when maps API is loaded
+  useEffect(() => {
+    if (isLoaded && !geocoder) {
+      setGeocoder(new google.maps.Geocoder());
+    }
+  }, [isLoaded, geocoder]);
+
+  // Add effect to geocode any coordinate-looking locations when itinerary is loaded
+  useEffect(() => {
+    if (itinerary && geocoder) {
+      let needsUpdate = false;
+      const updatedItinerary = {...itinerary};
+      
+      // Function to check if string looks like coordinates
+      const isCoordinateString = (str: string) => {
+        if (!str) return false;
+        
+        // Check for various coordinate formats
+        // Format: "lat,lng" or "lat, lng"
+        const basicFormat = /^-?\d+\.?\d*,\s*-?\d+\.?\d*$/;
+        
+        // Check if it has letters (likely an address, not coordinates)
+        const hasLetters = /[a-zA-Z]/.test(str);
+        
+        // If it matches the basic format and doesn't have letters, it's likely coordinates
+        return basicFormat.test(str) && !hasLetters;
+      };
+      
+      // Process each day and activity
+      const promises: Promise<void>[] = [];
+      
+      console.log("Starting geocoding check for all locations");
+      
+      updatedItinerary.days.forEach((day, dayIndex) => {
+        if (day.activities) {
+          day.activities.forEach((activity: any, activityIndex: number) => {
+            const location = activity.location;
+            
+            // Check if this looks like coordinates or lacks text (might be coordinates)
+            if (location && (isCoordinateString(location) || 
+                           (location.includes(',') && location.split(',').length === 2))) {
+              
+              console.log(`Detected potential coordinates: "${location}" for day ${dayIndex+1}, stop ${activityIndex+1}`);
+              
+              // Try to extract coordinates regardless of format
+              const parts = location.split(',').map((part: string) => part.trim());
+              if (parts.length === 2) {
+                const lat = parseFloat(parts[0]);
+                const lng = parseFloat(parts[1]);
+                
+                if (!isNaN(lat) && !isNaN(lng)) {
+                  needsUpdate = true;
+                  console.log(`Geocoding: ${lat}, ${lng}`);
+                  
+                  // Create a promise for geocoding
+                  const geocodePromise = reverseGeocode(lat, lng).then(address => {
+                    console.log(`Geocoded "${location}" to "${address}"`);
+                    updatedItinerary.days[dayIndex].activities[activityIndex].location = address;
+                  });
+                  
+                  promises.push(geocodePromise);
+                }
+              }
+            }
+          });
+        }
+      });
+      
+      // If any coordinates need geocoding, update the itinerary when done
+      if (needsUpdate && promises.length > 0) {
+        console.log(`Found ${promises.length} locations to geocode`);
+        Promise.all(promises).then(() => {
+          console.log("Geocoding complete, updating itinerary");
+          setItinerary(updatedItinerary);
+        }).catch(error => {
+          console.error("Error geocoding coordinates:", error);
+        });
+      } else {
+        console.log("No locations needed geocoding");
+      }
+    }
+  }, [itinerary?.id, geocoder, isLoaded]); // Only run when itinerary ID changes or geocoder becomes available
+
+  // Function to reverse geocode coordinates to address
+  const reverseGeocode = async (lat: number, lng: number): Promise<string> => {
+    if (!geocoder) return `${lat}, ${lng}`;
+    
+    try {
+      const response = await geocoder.geocode({
+        location: { lat, lng }
+      });
+      
+      if (response.results && response.results.length > 0) {
+        return response.results[0].formatted_address;
+      }
+    } catch (error) {
+      console.error("Error reverse geocoding:", error);
+    }
+    
+    return `${lat}, ${lng}`;
+  };
+
   useEffect(() => {
     const fetchItinerary = async () => {
       try {
@@ -154,25 +262,87 @@ export default function EditItineraryPage() {
 
         // Transform the data to ensure consistency between "stops" and "activities"
         if (data.days) {
+          // Log the data structure to inspect it
+          console.log("Itinerary data structure:", JSON.stringify(data.days[0]?.stops?.[0] || {}, null, 2));
+          
+          // Create an array of promises for reverse geocoding
+          const geocodingPromises: Promise<void>[] = [];
+          
           data.days.forEach((day: any) => {
             // If the backend returned "stops" instead of "activities", map it
             if (day.stops && !day.activities) {
-              day.activities = day.stops.map((stop: any) => ({
-                id: stop.id,
-                name: stop.name,
-                description: stop.description,
-                type: stop.stop_type || "activity",
-                location: stop.location || "",
-                latitude: stop.latitude ? parseFloat(stop.latitude) : undefined,
-                longitude: stop.longitude ? parseFloat(stop.longitude) : undefined
-              }));
+              day.activities = day.stops.map((stop: any) => {
+                // Create a formatted location from latitude/longitude if not present
+                let locationStr = "";
+                
+                if (stop.location) {
+                  locationStr = stop.location;
+                } else if (stop.address) {
+                  locationStr = stop.address;
+                } else if (stop.place_name) {
+                  locationStr = stop.place_name;
+                } else if (stop.latitude && stop.longitude) {
+                  // Just use coordinates as placeholder; we'll geocode later
+                  locationStr = `${stop.latitude}, ${stop.longitude}`;
+                  
+                  // If coordinates exist and geocoder is ready, queue up reverse geocoding
+                  if (geocoder && !isNaN(parseFloat(stop.latitude)) && !isNaN(parseFloat(stop.longitude))) {
+                    const lat = parseFloat(stop.latitude);
+                    const lng = parseFloat(stop.longitude);
+                    const stopRef = stop; // Keep reference to update it later
+                    
+                    const geocodePromise = reverseGeocode(lat, lng).then(address => {
+                      stopRef._locationAddress = address; // Store in temp property to apply later
+                    });
+                    
+                    geocodingPromises.push(geocodePromise);
+                  }
+                }
+                
+                return {
+                  id: stop.id,
+                  name: stop.name,
+                  description: stop.description,
+                  type: stop.stop_type || "activity",
+                  location: locationStr,
+                  _originalStop: stop, // Keep reference to original stop
+                  latitude: stop.latitude ? parseFloat(stop.latitude) : undefined,
+                  longitude: stop.longitude ? parseFloat(stop.longitude) : undefined
+                };
+              });
             } else if (!day.activities) {
               day.activities = [];
             }
           });
+          
+          // Wait for all geocoding to complete, then update locations
+          if (geocodingPromises.length > 0) {
+            Promise.all(geocodingPromises).then(() => {
+              // Now update the itinerary with geocoded addresses
+              setItinerary(prevItinerary => {
+                if (!prevItinerary) return null;
+                
+                const updatedItinerary = {...prevItinerary};
+                updatedItinerary.days.forEach(day => {
+                  day.activities.forEach((activity: any) => {
+                    if (activity._originalStop && activity._originalStop._locationAddress) {
+                      activity.location = activity._originalStop._locationAddress;
+                      delete activity._originalStop;
+                    }
+                  });
+                });
+                
+                return updatedItinerary;
+              });
+            });
+          }
         }
 
         setItinerary(data)
+        // Store the original days data for restoration if needed
+        if (data && data.days) {
+          setOriginalDays(JSON.parse(JSON.stringify(data.days)));
+        }
 
         // When itinerary is loaded, set the price range
         if (data) {
@@ -491,23 +661,86 @@ export default function EditItineraryPage() {
       // Add days and stops data as JSON
       formData.append('days_data', JSON.stringify(itinerary.days));
 
+      // Add debugging to show what's being sent
+      console.log("Submitting form data:", {
+        name: itinerary.name,
+        description: itinerary.description,
+        destination: itinerary.destination,
+        duration: itinerary.duration,
+        price: itinerary.price,
+        latitude: itinerary.latitude,
+        longitude: itinerary.longitude,
+        days_data_length: JSON.stringify(itinerary.days).length,
+      });
+
+      // Log a sample of the days data for debugging
+      if (itinerary.days.length > 0) {
+        console.log("First day sample:", JSON.stringify(itinerary.days[0]));
+      }
+
+      // Ensure we're sending properly formatted days data that the backend expects
+      // Convert activities to backend format expectation if needed
+      const processedDays = itinerary.days.map(day => {
+        // Make a deep copy to avoid modifying the original data
+        const processedDay = { ...day } as any; // Use 'any' to allow adding stops
+        
+        // Convert activities for backend compatibility
+        if (processedDay.activities) {
+          // Backend might expect "stops" instead of "activities"
+          processedDay.stops = processedDay.activities.map((activity: {
+            id?: number;
+            name: string;
+            description: string;
+            type: string;
+            location: string;
+            latitude?: number;
+            longitude?: number;
+          }) => ({
+            name: activity.name,
+            description: activity.description,
+            stop_type: activity.type,
+            location: activity.location,
+            latitude: activity.latitude?.toString(),
+            longitude: activity.longitude?.toString(),
+            // Include ID if it exists (for existing stops)
+            ...(activity.id ? { id: activity.id } : {})
+          }));
+        }
+        
+        return processedDay;
+      });
+
+      // Try sending both formats to ensure compatibility with backend
+      formData.append('days_json', JSON.stringify(processedDays));
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/user/itineraries/${id}/`, {
         method: 'PUT',
-		headers: {
+        headers: {
           'Authorization': `Token ${token}`
           // 'Content-Type': 'multipart/form-data' is set automatically by browser for FormData
         },
         body: formData,
       })
+      
+      // Log response status for debugging
+      console.log("API response status:", response.status);
+      
+      // Read the response data for analysis
+      const responseText = await response.text();
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+        console.log("API response data:", responseData);
+      } catch (e) {
+        console.log("Could not parse response as JSON:", responseText);
+      }
 
       if (!response.ok) {
-		  const errorData = await response.json();
-		  console.error("Error Response From Server:", errorData); // 👈 Add this line!
-		  if (errorData && typeof errorData === 'object') {
-			setErrors(errorData);
-		  }
-		  throw new Error(errorData.detail || "Failed to update itinerary");
-		}
+        if (responseData && typeof responseData === 'object') {
+          setErrors(responseData);
+        }
+        throw new Error(responseData?.detail || "Failed to update itinerary");
+      }
 
       toast({
         title: "Success",
@@ -644,54 +877,245 @@ export default function EditItineraryPage() {
                 {/* Duration Input */}
                 <div>
                   <Label htmlFor="duration">Duration (days)</Label>
-                  <Input
-                    id="duration"
-                    type="number"
-                    value={itinerary.duration}
-                    onChange={(e) => {
-                      const value = parseInt(e.target.value);
-                      const newDuration = isNaN(value) ? 1 : Math.max(1, value);
-                      
-                      // Update itinerary with new duration and adjust days array
-                      setItinerary(prev => {
-                        if (!prev) return null;
-                        
-                        const updatedDays = [...prev.days];
-                        const currentDaysCount = updatedDays.length;
-                        
-                        // Adding days
-                        if (newDuration > currentDaysCount) {
-                          for (let i = currentDaysCount + 1; i <= newDuration; i++) {
-                            updatedDays.push({
-                              day_number: i,
-                              title: `Day ${i}`,
-                              description: "",
-                              activities: []
-                            });
-                          }
-                        } 
-                        // Removing days (only remove from the end)
-                        else if (newDuration < currentDaysCount) {
-                          updatedDays.splice(newDuration);
+                  <div className="flex items-center">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="rounded-r-none"
+                      onClick={() => {
+                        const newDuration = Math.max(1, itinerary.duration - 1);
+                        // Update itinerary state directly instead of using the input
+                        setItinerary(prev => {
+                          if (!prev) return null;
+                          
+                          const updatedDays = [...prev.days].slice(0, newDuration);
                           
                           // Adjust activeDay if it's now out of bounds
                           if (activeDay >= newDuration) {
                             setActiveDay(newDuration - 1);
                           }
-                        }
+                          
+                          return {
+                            ...prev,
+                            duration: newDuration,
+                            days: updatedDays
+                          };
+                        });
                         
-                        return {
-                          ...prev,
-                          duration: newDuration,
-                          days: updatedDays
-                        };
-                      });
-                      
-                      setTouched(prev => ({...prev, duration: true}));
-                    }}
-                    required
-                    min="1"
-                  />
+                        setTouched(prev => ({...prev, duration: true}));
+                      }}
+                      aria-label="Decrease duration"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14"/>
+                      </svg>
+                    </Button>
+                    <Input
+                      id="duration"
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="rounded-none text-center"
+                      value={itinerary.duration}
+                      onChange={(e) => {
+                        // Parse the input and ensure it's a valid number
+                        const value = e.target.value === '' ? 1 : parseInt(e.target.value);
+                        const newDuration = isNaN(value) ? 1 : Math.max(1, value);
+                        
+                        // Update itinerary with new duration and adjust days array
+                        setItinerary(prev => {
+                          if (!prev) return null;
+                          
+                          const updatedDays = [...prev.days];
+                          const currentDaysCount = updatedDays.length;
+                          
+                          // Adding days
+                          if (newDuration > currentDaysCount) {
+                            // Create an array to track days that need geocoding
+                            const daysNeedingGeocoding: Array<{dayIndex: number, stopIndex: number, lat: number, lng: number}> = [];
+                            
+                            for (let i = currentDaysCount + 1; i <= newDuration; i++) {
+                              // Check if we have original data for this day
+                              const originalDay = originalDays.find(day => day.day_number === i);
+                              
+                              if (originalDay) {
+                                // Use the original day data if available
+                                const newDayIndex = updatedDays.length;
+                                const clonedDay = JSON.parse(JSON.stringify(originalDay));
+                                updatedDays.push(clonedDay);
+                                
+                                // Check each stop to see if it needs geocoding
+                                if (clonedDay.activities) {
+                                  clonedDay.activities.forEach((activity: any, stopIndex: number) => {
+                                    const needsGeocoding = 
+                                      !activity.location || 
+                                      (activity.location.includes(',') && 
+                                       activity.latitude && 
+                                       activity.longitude);
+                                       
+                                    if (needsGeocoding && activity.latitude && activity.longitude) {
+                                      daysNeedingGeocoding.push({
+                                        dayIndex: newDayIndex,
+                                        stopIndex,
+                                        lat: parseFloat(activity.latitude),
+                                        lng: parseFloat(activity.longitude)
+                                      });
+                                    }
+                                  });
+                                }
+                              } else {
+                                // Create a new day if no original data exists
+                                updatedDays.push({
+                                  day_number: i,
+                                  title: `Day ${i}`,
+                                  description: "",
+                                  activities: []
+                                });
+                              }
+                            }
+                            
+                            // Asynchronously geocode the restored locations if needed
+                            if (daysNeedingGeocoding.length > 0 && geocoder) {
+                              const daysCopy = [...updatedDays];
+                              
+                              // Start geocoding in the background
+                              Promise.all(
+                                daysNeedingGeocoding.map(item => 
+                                  reverseGeocode(item.lat, item.lng)
+                                    .then(address => {
+                                      // Update the days copy with the geocoded address
+                                      if (daysCopy[item.dayIndex] && 
+                                          daysCopy[item.dayIndex].activities && 
+                                          daysCopy[item.dayIndex].activities[item.stopIndex]) {
+                                        daysCopy[item.dayIndex].activities[item.stopIndex].location = address;
+                                      }
+                                    })
+                                )
+                              ).then(() => {
+                                // Update the itinerary state with the geocoded addresses
+                                setItinerary(currentItinerary => {
+                                  if (!currentItinerary) return null;
+                                  return { ...currentItinerary, days: daysCopy };
+                                });
+                              });
+                            }
+                          }
+                          
+                          return {
+                            ...prev,
+                            duration: newDuration,
+                            days: updatedDays
+                          };
+                        });
+                        
+                        setTouched(prev => ({...prev, duration: true}));
+                      }}
+                      required
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="rounded-l-none"
+                      onClick={() => {
+                        const newDuration = itinerary.duration + 1;
+                        // Update itinerary state directly instead of using the input
+                        setItinerary(prev => {
+                          if (!prev) return null;
+                          
+                          const updatedDays = [...prev.days];
+                          const currentDaysCount = updatedDays.length;
+                          
+                          // Adding days
+                          if (newDuration > currentDaysCount) {
+                            // Create an array to track days that need geocoding
+                            const daysNeedingGeocoding: Array<{dayIndex: number, stopIndex: number, lat: number, lng: number}> = [];
+                            
+                            for (let i = currentDaysCount + 1; i <= newDuration; i++) {
+                              // Check if we have original data for this day
+                              const originalDay = originalDays.find(day => day.day_number === i);
+                              
+                              if (originalDay) {
+                                // Use the original day data if available
+                                const newDayIndex = updatedDays.length;
+                                const clonedDay = JSON.parse(JSON.stringify(originalDay));
+                                updatedDays.push(clonedDay);
+                                
+                                // Check each stop to see if it needs geocoding
+                                if (clonedDay.activities) {
+                                  clonedDay.activities.forEach((activity: any, stopIndex: number) => {
+                                    const needsGeocoding = 
+                                      !activity.location || 
+                                      (activity.location.includes(',') && 
+                                       activity.latitude && 
+                                       activity.longitude);
+                                       
+                                    if (needsGeocoding && activity.latitude && activity.longitude) {
+                                      daysNeedingGeocoding.push({
+                                        dayIndex: newDayIndex,
+                                        stopIndex,
+                                        lat: parseFloat(activity.latitude),
+                                        lng: parseFloat(activity.longitude)
+                                      });
+                                    }
+                                  });
+                                }
+                              } else {
+                                // Create a new day if no original data exists
+                                updatedDays.push({
+                                  day_number: i,
+                                  title: `Day ${i}`,
+                                  description: "",
+                                  activities: []
+                                });
+                              }
+                            }
+                            
+                            // Asynchronously geocode the restored locations if needed
+                            if (daysNeedingGeocoding.length > 0 && geocoder) {
+                              const daysCopy = [...updatedDays];
+                              
+                              // Start geocoding in the background
+                              Promise.all(
+                                daysNeedingGeocoding.map(item => 
+                                  reverseGeocode(item.lat, item.lng)
+                                    .then(address => {
+                                      // Update the days copy with the geocoded address
+                                      if (daysCopy[item.dayIndex] && 
+                                          daysCopy[item.dayIndex].activities && 
+                                          daysCopy[item.dayIndex].activities[item.stopIndex]) {
+                                        daysCopy[item.dayIndex].activities[item.stopIndex].location = address;
+                                      }
+                                    })
+                                )
+                              ).then(() => {
+                                // Update the itinerary state with the geocoded addresses
+                                setItinerary(currentItinerary => {
+                                  if (!currentItinerary) return null;
+                                  return { ...currentItinerary, days: daysCopy };
+                                });
+                              });
+                            }
+                          }
+                          
+                          return {
+                            ...prev,
+                            duration: newDuration,
+                            days: updatedDays
+                          };
+                        });
+                        
+                        setTouched(prev => ({...prev, duration: true}));
+                      }}
+                      aria-label="Increase duration"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M5 12h14"/>
+                        <path d="M12 5v14"/>
+                      </svg>
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Price Range Selection */}
@@ -825,16 +1249,6 @@ export default function EditItineraryPage() {
                     {errors.days?.[activeDay]?.title && (
                       <p className="text-sm text-red-600 mt-1">{errors.days[activeDay].title}</p>
                     )}
-                  </div>
-                  
-                  {/* Day Description */}
-                  <div>
-                    <Label htmlFor={`day-${activeDay}-description`}>Day Description</Label>
-                    <Textarea
-                      id={`day-${activeDay}-description`}
-                      value={itinerary.days[activeDay].description}
-                      onChange={(e) => updateDayField(activeDay, 'description', e.target.value)}
-                    />
                   </div>
                   
                   {/* Stops for this day */}

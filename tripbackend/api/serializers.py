@@ -153,6 +153,8 @@ class ItinerarySerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         days_data = self.context.get('days_data', None)
+        logger.info(f"Serializer.update called for itinerary {instance.id} with days_data: {days_data}")
+        logger.info(f"Serializer.update validated_data: {validated_data}")
         logger.info(f"Updating itinerary {instance.id} with validated data: {validated_data}")
         logger.info(f"Received Days data in update via context: {days_data}")
         

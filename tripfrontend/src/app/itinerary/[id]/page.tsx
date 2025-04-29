@@ -98,7 +98,10 @@ export default function ItineraryDetailPage() {
   useEffect(() => {
     const fetchItinerary = async () => {
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/`)
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/`,
+          { cache: 'no-store' }
+        )
         if (!response.ok) {
           throw new Error("Failed to fetch itinerary")
         }
@@ -144,7 +147,10 @@ export default function ItineraryDetailPage() {
       try {
         console.log('Fetching reviews for itinerary:', id)
         // Don't require token for GET requests
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/reviews/`)
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/itineraries/${id}/reviews/`,
+          { cache: 'no-store' }
+        )
         console.log('Reviews API response status:', response.status)
         
         if (!response.ok) {
